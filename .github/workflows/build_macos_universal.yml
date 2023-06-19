@@ -7,6 +7,9 @@ jobs:
   build_macos_universal:
     runs-on: macos-12
     steps:
+    - name: Setup
+      run: |
+        brew install coreutils
     - name: Download
       run: |
         QT_URL="https://download.qt.io/official_releases/qt/5.15/5.15.10/single/qt-everywhere-opensource-src-5.15.10.tar.xz"
@@ -23,7 +26,7 @@ jobs:
       working-directory: ./build
       run: |
         echo "Note: using $((`nproc`+1)) parallel jobs"
-        make -j$((`nproc`+1))
+        make -j$((`nproc`+1)) | gfmt -120 -t
     - name: Install
       working-directory: ./build
       run: |
