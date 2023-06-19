@@ -22,11 +22,12 @@ jobs:
     - name: Build
       working-directory: ./build
       run: |
-        make
+        echo "Note: using $((`nproc`+1)) parallel jobs"
+        make -j$((`nproc`+1))
     - name: Install
       working-directory: ./build
       run: |
-        make install
+        make install -j1
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
