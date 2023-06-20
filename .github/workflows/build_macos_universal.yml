@@ -21,13 +21,13 @@ jobs:
         cd build
         ../qt-everywhere-src-5.15.10/configure -prefix ../install -opensource -confirm-license -release -no-debug-and-release \
             -nomake examples -nomake tests \
-            -nomake qt3d \
-            -nomake qtcharts \
-            -nomake qtdatavis3d \
-            -nomake qtlocation \
-            -nomake qtquick3d \
-            -nomake qtspeech \
-            -nomake qtvirtualkeyboard \
+            -skip qt3d \
+            -skip qtcharts \
+            -skip qtdatavis3d \
+            -skip qtlocation \
+            -skip qtquick3d \
+            -skip qtspeech \
+            -skip qtvirtualkeyboard \
             QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64"
     - name: Build
       working-directory: ./build
