@@ -32,8 +32,8 @@ jobs:
     - name: Build
       working-directory: ./build
       run: |
-        echo "Note: using $((`nproc`+1)) parallel jobs"
-        make -j$((`nproc`+1))
+        echo "Note: using $((`sysctl -n hw.ncpu`+1)) parallel jobs"
+        make -j$((`sysctl -n hw.ncpu`+1))
     - name: Install
       working-directory: ./build
       run: |
