@@ -11,13 +11,10 @@ jobs:
       run: |
         brew install cmake ninja
         brew uninstall postgresql@14 # not Universal
-    - name: Download
+    - name: Download and unpack
       run: |
         QT_URL="https://download.qt.io/official_releases/qt/5.15/5.15.10/single/qt-everywhere-opensource-src-5.15.10.tar.xz"
-        wget -q --show-progress -O Qt_5_15_10.tar.xz "${QT_URL}"
-    - name: Unpack
-      run: |
-        tar xJvf Qt_5_15_10.tar.xz
+        wget -q "${QT_URL}" -O - | tar xJvf -
     - name: Configure
       run: |
         mkdir build
