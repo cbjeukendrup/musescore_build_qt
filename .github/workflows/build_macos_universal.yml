@@ -10,6 +10,7 @@ jobs:
     - name: Setup
       run: |
         brew install coreutils
+        brew install cmake ninja
     - name: Download
       run: |
         QT_URL="https://download.qt.io/official_releases/qt/5.15/5.15.10/single/qt-everywhere-opensource-src-5.15.10.tar.xz"
