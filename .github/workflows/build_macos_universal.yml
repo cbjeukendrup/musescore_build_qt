@@ -9,7 +9,6 @@ jobs:
     steps:
     - name: Setup
       run: |
-        brew install coreutils
         brew install cmake ninja
         brew uninstall postgresql@14 # not Universal
     - name: Download
@@ -28,7 +27,7 @@ jobs:
       working-directory: ./build
       run: |
         echo "Note: using $((`nproc`+1)) parallel jobs"
-        make -j$((`nproc`+1)) | gfmt -120 -t
+        make -j$((`nproc`+1))
     - name: Install
       working-directory: ./build
       run: |
