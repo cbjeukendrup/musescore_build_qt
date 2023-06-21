@@ -44,8 +44,11 @@ jobs:
       working-directory: ./build
       run: |
         make install -j1
+    - name: Package
+      run: |
+        zip -r "Qt 5.15.10 for macOS.zip" ./install
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
         name: "Qt 5.15.10 for macOS"
-        path: ./install/
+        path: "Qt 5.15.10 for macOS.zip"
