@@ -28,6 +28,7 @@ jobs:
             -skip qtquick3d \
             -skip qtspeech \
             -skip qtvirtualkeyboard \
+            -skip qtwebengine \
             QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64"
     - name: Build
       working-directory: ./build
