@@ -18,8 +18,9 @@ jobs:
         echo "echo yo; exit 1" >> ../install/bin/qmake
         chmod +x ../install/bin/qmake
     - name: Package
+      working-directory: ./install
       run: |
-        zip -r "Qt 5.15.10 for macOS.zip" ./install/*
+        zip -r "../Qt 5.15.10 for macOS.zip" .
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
