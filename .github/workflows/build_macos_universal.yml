@@ -45,8 +45,9 @@ jobs:
       run: |
         make install -j1
     - name: Package
+      working-directory: ./install
       run: |
-        zip -r "Qt 5.15.10 for macOS.zip" ./install
+        zip -r "../Qt 5.15.10 for macOS.zip" .
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
@@ -89,8 +90,9 @@ jobs:
       run: |
         make install -j1
     - name: Package
+      working-directory: ./install
       run: |
-        zip -r "Qt 5.15.10 for macOS with QtWebEngine.zip" ./install
+        zip -r "../Qt 5.15.10 for macOS with QtWebEngine.zip" .
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
