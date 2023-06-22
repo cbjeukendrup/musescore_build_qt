@@ -69,7 +69,6 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: "Qt 5.15.10 for macOS"
-        path: "Qt 5.15.10 for macOS.zip"
     - name: Unpack already-built Qt
       run: |
         unzip "Qt 5.15.10 for macOS.zip" -d ./install

@@ -43,12 +43,13 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: "Qt 5.15.10 for macOS"
-        path: "Qt 5.15.10 for macOS.zip"
     - name: Show tree
       run: pwd; tree
     - name: Unpack already-built Qt
       run: |
         unzip "Qt 5.15.10 for macOS.zip" -d ./install
+    - name: Show tree
+      run: pwd; tree
     - name: Configure
       run: |
         mkdir build
