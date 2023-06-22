@@ -19,7 +19,7 @@ jobs:
         chmod +x ../install/bin/qmake
     - name: Package
       run: |
-        zip -r "Qt 5.15.10 for macOS.zip" ./install
+        zip -r "Qt 5.15.10 for macOS.zip" ./install/*
     - name: Upload
       uses: actions/upload-artifact@v3
       with:
