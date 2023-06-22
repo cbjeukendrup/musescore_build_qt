@@ -33,7 +33,7 @@ jobs:
     - name: Setup
       run: |
         brew install tree
-        brew install cmake ninja
+        brew install ninja
         brew uninstall postgresql@14 # not Universal
     # - name: Download and unpack source
     #   run: |
