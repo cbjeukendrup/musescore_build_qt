@@ -1,0 +1,75 @@
+name: "Test"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: macos-12
+    steps:
+    - name: Dummy configure
+      run: |
+        mkdir build
+    - name: Dummy install
+      working-directory: ./build
+      run: |
+        mkdir ../install
+        mkdir ../install/bin
+        echo "echo yo; exit 1" >> ../install/bin/qmake
+        chmod +x ../install/bin/qmake
+    - name: Package
+      run: |
+        zip -r "Qt 5.15.10 for macOS.zip" ./install
+    - name: Upload
+      uses: actions/upload-artifact@v3
+      with:
+        name: "Qt 5.15.10 for macOS"
+        path: "Qt 5.15.10 for macOS.zip"
+
+  build_qtwebengine:
+    runs-on: macos-12
+    needs: [build_qt]
+    steps:
+    - name: Setup
+      run: |
+        brew install tree
+        brew install cmake ninja
+        brew uninstall postgresql@14 # not Universal
+    - name: Download and unpack source
+      run: |
+        QT_URL="https://download.qt.io/official_releases/qt/5.15/5.15.10/single/qt-everywhere-opensource-src-5.15.10.tar.xz"
+        wget -q "${QT_URL}" -O - | tar xJvf -
+    - name: Show tree
+      run: tree
+    - name: Download already-built Qt
+      uses: actions/download-artifact@v3
+      with:
+        name: "Qt 5.15.10 for macOS"
+        path: "Qt 5.15.10 for macOS.zip"
+    - name: Unpack already-built Qt
+      run: |
+        unzip "Qt 5.15.10 for macOS.zip" -d ./install
+    - name: Configure
+      run: |
+        mkdir build
+        cd build
+        ../install/bin/qmake QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" \
+            ../qt-everywhere-src-5.15.10/qtwebengine \
+            -- -no-webengine-geolocation -webengine-proprietary-codecs -webengine-native-spellchecker
+    - name: Build
+      working-directory: ./build
+      run: |
+        echo "Note: using $((`sysctl -n hw.ncpu`+1)) parallel jobs"
+        make -j$((`sysctl -n hw.ncpu`+1)) NINJAJOBS=-j$((`sysctl -n hw.ncpu`+1))
+    - name: Install
+      working-directory: ./build
+      run: |
+        make install -j1
+    - name: Package
+      run: |
+        zip -r "Qt 5.15.10 for macOS with QtWebEngine.zip" ./install
+    - name: Upload
+      uses: actions/upload-artifact@v3
+      with:
+        name: "Qt 5.15.10 for macOS with QtWebEngine"
+        path: "Qt 5.15.10 for macOS with QtWebEngine.zip"
