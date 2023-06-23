@@ -55,18 +55,16 @@ jobs:
       run: |
         mkdir build
         cd build
-        ../install/bin/qmake QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" \
-            ../qt-everywhere-src-5.15.10/qtwebengine \
-            -- -no-webengine-geolocation -webengine-proprietary-codecs
-    - name: Build
-      working-directory: ./build
-      run: |
-        echo "Note: using $((`sysctl -n hw.ncpu`+1)) parallel jobs"
-        make -j$((`sysctl -n hw.ncpu`+1)) NINJAJOBS=-j$((`sysctl -n hw.ncpu`+1))
-    - name: Install
-      working-directory: ./build
-      run: |
-        make install -j1
+        ../install/bin/qmake 
+    # - name: Build
+    #   working-directory: ./build
+    #   run: |
+    #     echo "Note: using $((`sysctl -n hw.ncpu`+1)) parallel jobs"
+    #     make -j$((`sysctl -n hw.ncpu`+1)) NINJAJOBS=-j$((`sysctl -n hw.ncpu`+1))
+    # - name: Install
+    #   working-directory: ./build
+    #   run: |
+    #     make install -j1
     - name: Package
       run: |
         zip -r "Qt 5.15.10 for macOS with QtWebEngine.zip" ./install
