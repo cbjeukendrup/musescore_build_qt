@@ -57,7 +57,7 @@ jobs:
         cd build
         ../install/bin/qmake QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" \
             ../qt-everywhere-src-5.15.10/qtwebengine \
-            -- -no-webengine-geolocation -webengine-proprietary-codecs -webengine-native-spellchecker
+            -- -no-webengine-geolocation -webengine-proprietary-codecs
     - name: Build
       working-directory: ./build
       run: |
