@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup
         run: |
-          choco install -y cmake ninja wget 7zip 
+          choco install -y cmake ninja wget 7zip
       - name: Download and unpack source
         shell: bash
         run: |
@@ -18,6 +18,7 @@ jobs:
           QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
       - name: Configure
+        shell: cmd
         run: |
           mkdir build
           cd build
@@ -27,6 +28,7 @@ jobs:
             -nomake examples ^
             -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
       - name: Build
+        shell: cmd
         working-directory: ./build
         env:
           NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
@@ -34,6 +36,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
           cmake --build . --parallel
       - name: Install
+        shell: cmd
         working-directory: ./build
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
