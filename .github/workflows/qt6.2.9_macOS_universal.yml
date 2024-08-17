@@ -1,0 +1,45 @@
+name: "Qt 6.2.9 - macOS - Universal"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: macos-latest
+    steps:
+      - name: Setup
+        run: |
+          brew install cmake ninja
+      - name: Download and unpack source
+        run: |
+          set -o pipefail
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../qt-everywhere-src-6.2.9/configure \
+            -prefix ../install \
+            -nomake examples \
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns \
+            -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          zip -r "../Qt 6.2.9 for macOS.zip" .
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Qt 6.2.9 for macOS"
+          path: "Qt 6.2.9 for macOS.zip"
