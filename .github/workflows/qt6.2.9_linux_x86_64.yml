@@ -48,7 +48,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          ..\qt-everywhere-src-6.2.9\configure \
+          ../qt-everywhere-src-6.2.9/configure \
             -prefix ../install \
             -nomake examples \
             -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
