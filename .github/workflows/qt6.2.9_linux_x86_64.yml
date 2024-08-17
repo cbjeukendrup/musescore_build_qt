@@ -39,7 +39,7 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libatspi2.0-dev
-          sudo rm /usr/lib/cmake/clang-12/ClangConfig.cmake:20
+          sudo rm /usr/lib/cmake/clang-12/ClangConfig.cmake
       - name: Download and unpack source
         run: |
           set -o pipefail
