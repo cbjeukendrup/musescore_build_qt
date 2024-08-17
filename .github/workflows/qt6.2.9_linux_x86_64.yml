@@ -69,8 +69,8 @@ jobs:
             -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
       - name: Build
         working-directory: ./build
-        env:
-          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        # env:
+        #   NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
         run: |
           cmake --build . --parallel
       - name: Install
