@@ -11,7 +11,11 @@ jobs:
       - name: Setup
         run: |
           sudo apt-get update
+
+          # Build tools
           sudo apt-get install -y cmake ninja-build
+
+          # Dependencies
           sudo apt-get install -y \
             libfontconfig1-dev \
             libfreetype-dev \
@@ -37,9 +41,18 @@ jobs:
             libxcb-xinerama0-dev \
             libxcb-xkb-dev \
             libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libatspi2.0-dev \
-            libclang-12-dev
+            libxkbcommon-x11-dev
+
+          # Accessibility dependencies
+          sudo apt-get install libatspi2.0-dev
+
+          # Libclang for QDoc
+          # (We don't need this, but GitHub Actions runners apparently contain a broken install, 
+          # so we reinstall it to make the configure script happy)
+          sudo apt-get install libclang-12-dev
+
+          # OpenGL
+          sudo apt-get install libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
       - name: Download and unpack source
         run: |
           set -o pipefail
