@@ -7,6 +7,7 @@ jobs:
   build_qt:
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Setup
         run: |
           brew install cmake ninja
@@ -17,34 +18,7 @@ jobs:
           wget -q "${QT_URL}" -O - | tar xJvf -
       - name: Patch
         run: |
-          cd qt-everywhere-src-6.2.9/qtbase
-          patch -p1 <<EOF
-          diff --git a/cmake/FindWrapOpenGL.cmake b/cmake/FindWrapOpenGL.cmake
-          index 3e6abaf..7295a15 100644
-          --- a/cmake/FindWrapOpenGL.cmake
-          +++ b/cmake/FindWrapOpenGL.cmake
-          @@ -17,14 +17,18 @@
-           
-               add_library(WrapOpenGL::WrapOpenGL INTERFACE IMPORTED)
-               if(APPLE)
-          +        # CMake 3.27 and older:
-                   # On Darwin platforms FindOpenGL sets IMPORTED_LOCATION to the absolute path of the library
-                   # within the framework. This ends up as an absolute path link flag, which we don't want,
-                   # because that makes our .prl files un-relocatable.
-                   # Extract the framework path instead, and use that in INTERFACE_LINK_LIBRARIES,
-          -        # which CMake ends up transforming into a reloctable -framework flag.
-          +        # which CMake ends up transforming into a relocatable -framework flag.
-                   # See https://gitlab.kitware.com/cmake/cmake/-/issues/20871 for details.
-          +        #
-          +        # CMake 3.28 and above:
-          +        # IMPORTED_LOCATION is the absolute path the the OpenGL.framework folder.
-                   get_target_property(__opengl_fw_lib_path OpenGL::GL IMPORTED_LOCATION)
-          -        if(__opengl_fw_lib_path)
-          +        if(__opengl_fw_lib_path AND NOT __opengl_fw_lib_path MATCHES "/([^/]+)\\.framework$")
-                       get_filename_component(__opengl_fw_path "${__opengl_fw_lib_path}" DIRECTORY)
-                   endif()
-           
-          EOF
+          patch -d qt-everywhere-src-6.2.9/qtbase -p1 < patches/qt6.2.9_qtbase_macos_opengl_build_fix.patch
       - name: Configure
         run: |
           mkdir build
