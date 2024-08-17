@@ -13,24 +13,26 @@ jobs:
           choco install -y cmake ninja wget 7zip
       - name: Download and unpack source
         shell: bash
+        working-directory: D:\a
         run: |
           set -o pipefail
           QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
       - name: Configure
         shell: cmd
+        working-directory: D:\a
         run: |
           mkdir build
           cd build
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
           ..\qt-everywhere-src-6.2.9\configure ^
-            -prefix ../install ^
+            -prefix D:\a\install ^
             -release ^
             -nomake examples ^
             -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
       - name: Build
         shell: cmd
-        working-directory: ./build
+        working-directory: D:\a\build
         env:
           NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
         run: |
@@ -38,12 +40,12 @@ jobs:
           cmake --build . --parallel
       - name: Install
         shell: cmd
-        working-directory: ./build
+        working-directory: D:\a\build
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
           cmake --install .
       - name: Package
-        working-directory: ./install
+        working-directory: D:\a\install
         run: |
           7z a -tzip "../Qt-6.2.9-Windows-amd64.zip" .
       - name: Upload
