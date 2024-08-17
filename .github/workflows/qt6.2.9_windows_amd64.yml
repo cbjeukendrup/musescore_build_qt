@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup
         run: |
-          winget install cmake ninja
+          choco install cmake ninja
       - name: Download and unpack source
         shell: bash
         run: |
