@@ -5,7 +5,7 @@ on:
 
 jobs:
   build_qt:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - name: Setup
         run: |
@@ -15,6 +15,35 @@ jobs:
           set -o pipefail
           QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
+      - name: Patch
+        run: |
+          cd qt-everywhere-src-6.2.9/qtbase
+          patch -p1 <<EOF
+          diff --git a/cmake/QtFrameworkHelpers.cmake b/cmake/QtFrameworkHelpers.cmake
+          index 6944fbde90..eeb67afb60 100644
+          --- a/cmake/QtFrameworkHelpers.cmake
+          +++ b/cmake/QtFrameworkHelpers.cmake
+          @@ -27,6 +27,7 @@ macro(qt_find_apple_system_frameworks)
+                   qt_internal_find_apple_system_framework(FWWatchKit WatchKit)
+                   qt_internal_find_apple_system_framework(FWGameController GameController)
+                   qt_internal_find_apple_system_framework(FWCoreBluetooth CoreBluetooth)
+          +        qt_internal_find_apple_system_framework(FWOpenGL OpenGL)
+               endif()
+           endmacro()
+           
+          diff --git a/src/plugins/platforms/cocoa/CMakeLists.txt b/src/plugins/platforms/cocoa/CMakeLists.txt
+          index 21f87dae83..ca318b8c91 100644
+          --- a/src/plugins/platforms/cocoa/CMakeLists.txt
+          +++ b/src/plugins/platforms/cocoa/CMakeLists.txt
+          @@ -93,6 +93,7 @@ qt_internal_add_resource(QCocoaIntegrationPlugin "qcocoaresources"
+           qt_internal_extend_target(QCocoaIntegrationPlugin CONDITION QT_FEATURE_opengl
+               SOURCES
+                   qcocoaglcontext.h qcocoaglcontext.mm
+          +    LIBRARIES ${FWOpenGL}
+           )
+           
+           qt_internal_extend_target(QCocoaIntegrationPlugin CONDITION QT_FEATURE_vulkan
+          EOF
       - name: Configure
         run: |
           mkdir build
