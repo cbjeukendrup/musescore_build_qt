@@ -1,0 +1,73 @@
+name: "Qt 6.2.9 - Linux - x86_64"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        run: |
+          apt-get update
+          apt-get install -y cmake ninja-build
+          apt-get install -y \
+            libfontconfig1-dev \
+            libfreetype-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxrender-dev \
+            libxcb1-dev \
+            libxcb-cursor-dev \
+            libxcb-glx0-dev \
+            libxcb-keysyms1-dev \
+            libxcb-image0-dev \
+            libxcb-shm0-dev \
+            libxcb-icccm4-dev \
+            libxcb-sync-dev \
+            libxcb-xfixes0-dev \
+            libxcb-shape0-dev \
+            libxcb-randr0-dev \
+            libxcb-render-util0-dev \
+            libxcb-util-dev \
+            libxcb-xinerama0-dev \
+            libxcb-xkb-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libatspi2.0-dev
+      - name: Download and unpack source
+        run: |
+          set -o pipefail
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ..\qt-everywhere-src-6.2.9\configure \
+            -prefix ../install \
+            -nomake examples \
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          zip -r "../Qt-6.2.9-Linux-x86_64.zip" .
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Qt-6.2.9-Linux-x86_64"
+          path: "Qt-6.2.9-Linux-x86_64.zip"

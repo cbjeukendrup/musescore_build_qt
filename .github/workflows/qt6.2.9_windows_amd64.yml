@@ -1,0 +1,49 @@
+name: "Qt 6.2.9 - Windows - amd64"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        run: |
+          winget install cmake ninja
+      - name: Download and unpack source
+        shell: bash
+        run: |
+          set -o pipefail
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
+          ..\qt-everywhere-src-6.2.9\configure \
+            -prefix ../install \
+            -nomake examples \
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          zip -r "../Qt-6.2.9-Windows-amd64.zip" .
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Qt-6.2.9-Windows-amd64"
+          path: "Qt-6.2.9-Windows-amd64.zip"
