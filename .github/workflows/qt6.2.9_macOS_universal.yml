@@ -41,9 +41,9 @@ jobs:
       - name: Package
         working-directory: ./install
         run: |
-          zip -r "../Qt 6.2.9 for macOS.zip" .
+          zip -r "../Qt-6.2.9-macOS.zip" .
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: "Qt 6.2.9 for macOS"
-          path: "Qt 6.2.9 for macOS.zip"
+          name: "Qt-6.2.9-macOS"
+          path: "Qt-6.2.9-macOS.zip"
