@@ -19,30 +19,31 @@ jobs:
         run: |
           cd qt-everywhere-src-6.2.9/qtbase
           patch -p1 <<EOF
-          diff --git a/cmake/QtFrameworkHelpers.cmake b/cmake/QtFrameworkHelpers.cmake
-          index 6944fbde90..eeb67afb60 100644
-          --- a/cmake/QtFrameworkHelpers.cmake
-          +++ b/cmake/QtFrameworkHelpers.cmake
-          @@ -27,6 +27,7 @@ macro(qt_find_apple_system_frameworks)
-                   qt_internal_find_apple_system_framework(FWWatchKit WatchKit)
-                   qt_internal_find_apple_system_framework(FWGameController GameController)
-                   qt_internal_find_apple_system_framework(FWCoreBluetooth CoreBluetooth)
-          +        qt_internal_find_apple_system_framework(FWOpenGL OpenGL)
-               endif()
-           endmacro()
+          diff --git a/cmake/FindWrapOpenGL.cmake b/cmake/FindWrapOpenGL.cmake
+          index 3e6abaf..7295a15 100644
+          --- a/cmake/FindWrapOpenGL.cmake
+          +++ b/cmake/FindWrapOpenGL.cmake
+          @@ -17,14 +17,18 @@
            
-          diff --git a/src/plugins/platforms/cocoa/CMakeLists.txt b/src/plugins/platforms/cocoa/CMakeLists.txt
-          index 21f87dae83..ca318b8c91 100644
-          --- a/src/plugins/platforms/cocoa/CMakeLists.txt
-          +++ b/src/plugins/platforms/cocoa/CMakeLists.txt
-          @@ -93,6 +93,7 @@ qt_internal_add_resource(QCocoaIntegrationPlugin "qcocoaresources"
-           qt_internal_extend_target(QCocoaIntegrationPlugin CONDITION QT_FEATURE_opengl
-               SOURCES
-                   qcocoaglcontext.h qcocoaglcontext.mm
-          +    LIBRARIES ${FWOpenGL}
-           )
+               add_library(WrapOpenGL::WrapOpenGL INTERFACE IMPORTED)
+               if(APPLE)
+          +        # CMake 3.27 and older:
+                   # On Darwin platforms FindOpenGL sets IMPORTED_LOCATION to the absolute path of the library
+                   # within the framework. This ends up as an absolute path link flag, which we don't want,
+                   # because that makes our .prl files un-relocatable.
+                   # Extract the framework path instead, and use that in INTERFACE_LINK_LIBRARIES,
+          -        # which CMake ends up transforming into a reloctable -framework flag.
+          +        # which CMake ends up transforming into a relocatable -framework flag.
+                   # See https://gitlab.kitware.com/cmake/cmake/-/issues/20871 for details.
+          +        #
+          +        # CMake 3.28 and above:
+          +        # IMPORTED_LOCATION is the absolute path the the OpenGL.framework folder.
+                   get_target_property(__opengl_fw_lib_path OpenGL::GL IMPORTED_LOCATION)
+          -        if(__opengl_fw_lib_path)
+          +        if(__opengl_fw_lib_path AND NOT __opengl_fw_lib_path MATCHES "/([^/]+)\\.framework$")
+                       get_filename_component(__opengl_fw_path "${__opengl_fw_lib_path}" DIRECTORY)
+                   endif()
            
-           qt_internal_extend_target(QCocoaIntegrationPlugin CONDITION QT_FEATURE_vulkan
           EOF
       - name: Configure
         run: |
