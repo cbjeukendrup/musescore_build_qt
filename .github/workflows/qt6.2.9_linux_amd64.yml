@@ -1,4 +1,4 @@
-name: "Qt 6.2.9 - Linux - x86_64"
+name: "Qt 6.2.9 - Linux - amd64"
 
 on:
   workflow_dispatch:
@@ -80,9 +80,9 @@ jobs:
       - name: Package
         working-directory: ./install
         run: |
-          zip -r "../Qt-6.2.9-Linux-x86_64.zip" .
+          zip -r "../Qt-6.2.9-Linux-amd64.zip" .
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: "Qt-6.2.9-Linux-x86_64"
-          path: "Qt-6.2.9-Linux-x86_64.zip"
+          name: "Qt-6.2.9-Linux-amd64"
+          path: "Qt-6.2.9-Linux-amd64.zip"
