@@ -44,7 +44,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
           cmake --install .
-      - name: Download pre-built opengl32sw.dll
+      - name: Download pre-built software rendering DLLs
         shell: bash
         working-directory: D:\a\install\bin
         run: |
