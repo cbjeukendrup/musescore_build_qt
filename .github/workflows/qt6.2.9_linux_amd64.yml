@@ -54,6 +54,9 @@ jobs:
           # OpenGL
           sudo apt-get install libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
 
+          # Vulkan
+          sudo apt-get install libvulkan-dev
+
           # Wayland
           sudo apt-get install libwayland-dev
 
