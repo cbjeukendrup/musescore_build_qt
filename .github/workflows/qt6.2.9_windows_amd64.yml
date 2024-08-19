@@ -51,6 +51,10 @@ jobs:
           OPENGL32SW_URL="https://download.qt.io/development_releases/prebuilt/llvmpipe/windows/opengl32sw-64-mesa_11_2_2-signed.7z"
           wget -q "${OPENGL32SW_URL}" -O /d/a/opengl32sw.7z
           7z x /d/a/opengl32sw.7z
+
+          D3DCOMPILER_47_URL="https://download.qt.io/development_releases/prebuilt/d3dcompiler/msvc2013/d3dcompiler_47-x64.7z"
+          wget -q "${D3DCOMPILER_47_URL}" -O /d/a/d3dcompiler_47.7z
+          7z x /d/a/d3dcompiler_47.7z
       - name: Package
         working-directory: D:\a\install
         run: |
