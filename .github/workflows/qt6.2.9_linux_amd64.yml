@@ -52,7 +52,7 @@ jobs:
           sudo apt-get install libclang-12-dev
 
           # OpenGL
-          sudo apt-get install libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
+          sudo apt-get install libopengl0 libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
 
           # Vulkan
           sudo apt-get install libvulkan-dev
