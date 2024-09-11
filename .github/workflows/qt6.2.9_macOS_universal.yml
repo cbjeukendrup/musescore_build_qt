@@ -28,7 +28,7 @@ jobs:
             -prefix ../install \
             -release \
             -nomake examples \
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns \
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns \
             -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
       - name: Build
         working-directory: ./build

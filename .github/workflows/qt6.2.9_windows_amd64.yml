@@ -29,7 +29,7 @@ jobs:
             -prefix D:\a\install ^
             -release ^
             -nomake examples ^
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns
       - name: Build
         shell: cmd
         working-directory: D:\a\build

@@ -78,7 +78,7 @@ jobs:
             -prefix ../install \
             -release \
             -nomake examples \
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtxmlpatterns,qtwayland
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns,qtwayland
       - name: Build
         working-directory: ./build
         # env:
