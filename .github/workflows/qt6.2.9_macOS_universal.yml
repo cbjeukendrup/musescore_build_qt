@@ -20,6 +20,9 @@ jobs:
         run: |
           # https://codereview.qt-project.org/c/qt/qtbase/+/503121
           patch -d qt-everywhere-src-6.2.9/qtbase -p1 < patches/qt6.2.9_qtbase_macos_opengl_build_fix.patch
+
+          # https://bugreports.qt.io/browse/QTBUG-113782
+          patch -d qt-everywhere-src-6.2.9/qtmultimedia -p1 < patches/qt6.2.9_qtmultimedia_macos_xcode_15_std_unary_function_build_fix.patch
       - name: Configure
         run: |
           mkdir build
