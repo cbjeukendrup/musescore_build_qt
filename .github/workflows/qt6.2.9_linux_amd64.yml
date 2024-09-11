@@ -49,7 +49,7 @@ jobs:
           # Libclang for QDoc
           # (We don't need this, but GitHub Actions runners apparently contain a broken install, 
           # so we reinstall it to make the configure script happy)
-          sudo apt-get install libclang-12-dev
+          sudo apt-get install libclang-12-dev libclang-11-dev
 
           # OpenGL
           sudo apt-get install libopengl0 libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
