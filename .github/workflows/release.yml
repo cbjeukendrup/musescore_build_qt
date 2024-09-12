@@ -3,18 +3,10 @@ name: "Create release"
 on:
   workflow_dispatch:
     inputs:
-      qt-version:
-        description: 'Qt version'
+      run-ids:
+        description: "Space-separated run IDs of builds to include in the release"
         required: true
-      run-id-macos: 
-        description: 'Run ID for macOS'
-        required: true
-      run-id-linux: 
-        description: 'Run ID for Linux'
-        required: true
-      run-id-windows:
-        description: 'Run ID for Windows'
-        required: true
+        default: ""
 
 permissions:
   actions: read
@@ -24,33 +16,23 @@ jobs:
   create_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Download macOS artifact
-        id: download-macos
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.inputs.run-id-macos }}
-          path: macos
-      - name: Download Linux artifact
-        id: download-linux
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.inputs.run-id-linux }}
-          path: linux
-      - name: Download Windows artifact
-        id: download-windows
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.inputs.run-id-windows }}
-          path: windows
+      - name: Download artifacts
+        env: 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_IDS: ${{ github.event.inputs.run-ids }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir downloads
+          cd downloads
+          for run_id in $RUN_IDS; do
+            echo "Downloading artifacts from run $run_id"
+            gh run download $run_id --repo $GITHUB_REPOSITORY
+          done
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.download-macos.outputs.download-path }}/**/*
-            ${{ steps.download-linux.outputs.download-path }}/**/*
-            ${{ steps.download-windows.outputs.download-path }}/**/*
-          name: "Qt ${{ github.event.inputs.qt-version }} - ${{ github.sha }}"
-          tag_name: "Qt-${{ github.event.inputs.qt-version }}-${{ github.sha }}"
+            downloads/**/*
+          name: "MuseScore Qt Build ${{ github.run_id }}"
+          tag_name: "v${{ github.run_id }}"
+          fail_on_unmatched_files: true
