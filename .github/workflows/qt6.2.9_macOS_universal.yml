@@ -5,12 +5,16 @@ on:
 
 jobs:
   build_qt:
-    runs-on: macos-latest
+    runs-on: macos-12
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Setup
         run: |
           brew install cmake ninja
+      - name: Use sccache
+        uses: mozilla-actions/sccache-action@v0.0.5
       - name: Download and unpack source
         run: |
           set -o pipefail
@@ -27,12 +31,14 @@ jobs:
         run: |
           mkdir build
           cd build
+          
+          # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
           ../qt-everywhere-src-6.2.9/configure \
             -prefix ../install \
-            -release \
+            -release -force-debug-info -separate-debug-info -headersclean -framework \
             -nomake examples \
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns \
-            -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns \
+            -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
       - name: Build
         working-directory: ./build
         env:

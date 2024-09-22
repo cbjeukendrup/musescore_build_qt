@@ -6,6 +6,8 @@ on:
 jobs:
   build_qt:
     runs-on: ubuntu-20.04
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Setup
@@ -65,6 +67,13 @@ jobs:
 
           # Printer support
           sudo apt-get install libcups2-dev
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+      - name: Use sccache
+        uses: mozilla-actions/sccache-action@v0.0.5
       - name: Download and unpack source
         run: |
           set -o pipefail
@@ -74,11 +83,15 @@ jobs:
         run: |
           mkdir build
           cd build
+          
+          # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
           ../qt-everywhere-src-6.2.9/configure \
             -prefix ../install \
-            -release \
+            -release -force-debug-info -separate-debug-info -headersclean \
+            -qt-libjpeg -qt-libpng -qt-pcre -qt-harfbuzz -qt-doubleconversion -no-libudev -bundled-xcb-xinput \
             -nomake examples \
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns,qtwayland
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns,qtwayland \
+            -- -DOpenGL_GL_PREFERENCE=LEGACY -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
       - name: Build
         working-directory: ./build
         # env:

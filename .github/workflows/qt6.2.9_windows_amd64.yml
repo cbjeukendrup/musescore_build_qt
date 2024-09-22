@@ -6,11 +6,15 @@ on:
 jobs:
   build_qt:
     runs-on: windows-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Setup
         run: |
           choco install -y cmake ninja wget 7zip
+      - name: Use sccache
+        uses: mozilla-actions/sccache-action@v0.0.5
       - name: Download and unpack source
         shell: bash
         working-directory: D:\a
@@ -24,12 +28,16 @@ jobs:
         run: |
           mkdir build
           cd build
+
+          # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
           ..\qt-everywhere-src-6.2.9\configure ^
             -prefix D:\a\install ^
-            -release ^
+            -debug-and-release -force-debug-info -headersclean ^
+            -qt-zlib ^
             -nomake examples ^
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns ^
+            -- -DFEATURE_msvc_obj_debug_info=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
       - name: Build
         shell: cmd
         working-directory: D:\a\build
