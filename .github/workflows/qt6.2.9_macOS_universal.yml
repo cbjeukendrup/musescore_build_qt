@@ -33,9 +33,10 @@ jobs:
           cd build
           
           # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
+          # -release -force-debug-info -separate-debug-info
           ../qt-everywhere-src-6.2.9/configure \
             -prefix ../install \
-            -release -force-debug-info -separate-debug-info -headersclean -framework \
+            -release -headersclean -framework \
             -nomake examples \
             -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns \
             -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
