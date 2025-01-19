@@ -1,0 +1,54 @@
+name: "Qt 6.2.11 - macOS - Universal"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        run: |
+          brew install cmake ninja
+      - name: Download and unpack source
+        run: |
+          set -o pipefail
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.11/src/single/qt-everywhere-opensource-src-6.2.11.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+      # - name: Patch
+      #   run: |
+      #     # https://codereview.qt-project.org/c/qt/qtbase/+/503121
+      #     patch -d qt-everywhere-src-6.2.8/qtbase -p1 < patches/qt6.2.9_qtbase_macos_opengl_build_fix.patch
+
+      #     # https://bugreports.qt.io/browse/QTBUG-113782
+      #     patch -d qt-everywhere-src-6.2.8/qtmultimedia -p1 < patches/qt6.2.9_qtmultimedia_macos_xcode_15_std_unary_function_build_fix.patch
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../qt-everywhere-src-6.2.11/configure \
+            -prefix ../install \
+            -release \
+            -nomake examples \
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview,qtxmlpatterns \
+            -- -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          zip -r "../Qt-6.2.11-macOS.zip" .
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Qt-6.2.11-macOS"
+          path: "Qt-6.2.11-macOS.zip"

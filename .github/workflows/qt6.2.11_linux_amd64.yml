@@ -1,4 +1,4 @@
-name: "Qt 6.2.9 - Linux - amd64"
+name: "Qt 6.2.11 - Linux - amd64"
 
 on:
   workflow_dispatch:
@@ -77,20 +77,22 @@ jobs:
       - name: Download and unpack source
         run: |
           set -o pipefail
-          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.11/src/single/qt-everywhere-opensource-src-6.2.11.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
       - name: Configure
         run: |
           mkdir build
           cd build
           
-          # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
+          # https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.11
           # -release -force-debug-info -separate-debug-info
-          ../qt-everywhere-src-6.2.9/configure \
+          ../qt-everywhere-src-6.2.11/configure \
             -prefix ../install \
-            -release \
+            -release -headersclean \
+            -qt-libjpeg -qt-libpng -qt-pcre -qt-harfbuzz -qt-doubleconversion -no-libudev -bundled-xcb-xinput \
             -nomake examples \
-            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns,qtwayland
+            -submodules qt5compat,qtdeclarative,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtsvg,qttools,qttranslations,qtwebsockets,qtxmlpatterns,qtwayland \
+            -- -DOpenGL_GL_PREFERENCE=LEGACY -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
       - name: Build
         working-directory: ./build
         # env:
@@ -104,9 +106,9 @@ jobs:
       - name: Package
         working-directory: ./install
         run: |
-          zip -r "../Qt-6.2.9-Linux-amd64.zip" .
+          zip -r "../Qt-6.2.11-Linux-amd64.zip" .
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: "Qt-6.2.9-Linux-amd64"
-          path: "Qt-6.2.9-Linux-amd64.zip"
+          name: "Qt-6.2.11-Linux-amd64"
+          path: "Qt-6.2.11-Linux-amd64.zip"

@@ -1,4 +1,4 @@
-name: "Qt 6.2.9 - Windows - amd64"
+name: "Qt 6.2.11 - Windows - amd64"
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
         working-directory: D:\a
         run: |
           set -o pipefail
-          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.9/single/qt-everywhere-opensource-src-6.2.9.tar.xz"
+          QT_URL="https://download.qt.io/archive/qt/6.2/6.2.11/src/single/qt-everywhere-opensource-src-6.2.11.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
       - name: Configure
         shell: cmd
@@ -29,10 +29,10 @@ jobs:
           mkdir build
           cd build
 
-          REM https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.9
+          REM https://wiki.qt.io/Qt_6.2_Tools_and_Versions#Software_configurations_for_Qt_6.2.11
           REM -debug-and-release -force-debug-info
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
-          ..\qt-everywhere-src-6.2.9\configure ^
+          ..\qt-everywhere-src-6.2.11\configure ^
             -prefix D:\a\install ^
             -release -headersclean ^
             -qt-zlib ^
@@ -67,9 +67,9 @@ jobs:
       - name: Package
         working-directory: D:\a\install
         run: |
-          7z a -tzip "../Qt-6.2.9-Windows-amd64.zip" .
+          7z a -tzip "../Qt-6.2.11-Windows-amd64.zip" .
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: "Qt-6.2.9-Windows-amd64"
-          path: "D:/a/Qt-6.2.9-Windows-amd64.zip"
+          name: "Qt-6.2.11-Windows-amd64"
+          path: "D:/a/Qt-6.2.11-Windows-amd64.zip"
