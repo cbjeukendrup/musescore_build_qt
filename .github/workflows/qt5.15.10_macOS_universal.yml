@@ -67,7 +67,7 @@ jobs:
         QT_URL="https://download.qt.io/official_releases/qt/5.15/5.15.10/single/qt-everywhere-opensource-src-5.15.10.tar.xz"
         wget -q "${QT_URL}" -O - | tar xJvf -
     - name: Download already-built Qt
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: "Qt 5.15.10 for macOS"
     - name: Unpack already-built Qt
