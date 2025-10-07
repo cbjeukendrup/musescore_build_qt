@@ -1,0 +1,52 @@
+name: "Qt 6.9.3 - macOS - Universal - 10.15"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.15"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download and unpack source
+        run: |
+          set -o pipefail
+          QT_URL="https://download.qt.io/archive/qt/6.9/6.9.3/single/qt-everywhere-src-6.9.3.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+      - name: Patch
+        run: |
+          patch -d qt-everywhere-src-6.9.3 < patches/qt6.9.3_macos_10_15.diff
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../qt-everywhere-src-6.9.3/configure \
+            -prefix ../install \
+            -release \
+            -nomake examples \
+            -nomake tests \
+            -submodules qtbase \
+            -- \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          7z a "../Qt-6.9.3-macOS-10.15.7z" ./*
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Qt-6.9.3-macOS-10.15"
+          path: "Qt-6.9.3-macOS-10.15.7z"
