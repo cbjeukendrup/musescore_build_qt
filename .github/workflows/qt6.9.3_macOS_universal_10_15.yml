@@ -27,7 +27,7 @@ jobs:
             -release \
             -nomake examples \
             -nomake tests \
-            -submodules qt5compat,qtbase,qtdeclarative,qtgraphs,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtshadertools,qtsvg,qttools,qttranslations,qtwebsockets,qtwebview \
+            -submodules qt5compat,qtbase,qtdeclarative,qtgraphs,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtshadertools,qtsvg,qttools,qttranslations,qtwebsockets \
             -- \
             -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15.4
