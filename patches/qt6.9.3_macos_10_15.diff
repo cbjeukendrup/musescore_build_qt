@@ -1,4 +1,32 @@
 Submodule qtbase contains modified content
+diff --git a/qtbase/cmake/QtFrameworkHelpers.cmake b/qtbase/cmake/QtFrameworkHelpers.cmake
+index 55a848b357c..346e9aacc27 100644
+--- a/qtbase/cmake/QtFrameworkHelpers.cmake
++++ b/qtbase/cmake/QtFrameworkHelpers.cmake
+@@ -56,8 +56,10 @@ function(qt_internal_find_apple_system_framework out_var framework_name)
+ 
+     if(${cache_var_name} AND ${cache_var_name} MATCHES ".framework$")
+         set(${out_var} "-framework ${framework_name}" PARENT_SCOPE)
++        set(${out_var}Weak "-weak_framework ${framework_name}" PARENT_SCOPE)
+     else()
+         set(${out_var} "${out_var}-NOTFOUND" PARENT_SCOPE)
++        set(${out_var}Weak "${out_var}Weak-NOTFOUND" PARENT_SCOPE)
+     endif()
+ endfunction()
+ 
+diff --git a/qtbase/src/corelib/CMakeLists.txt b/qtbase/src/corelib/CMakeLists.txt
+index 24812057d10..6db4cfb024f 100644
+--- a/qtbase/src/corelib/CMakeLists.txt
++++ b/qtbase/src/corelib/CMakeLists.txt
+@@ -730,7 +730,7 @@ qt_internal_extend_target(Core CONDITION UNIX
+ if(APPLE)
+     set_source_files_properties(io/qfilesystemengine_unix.cpp PROPERTIES LANGUAGE OBJCXX)
+     qt_internal_extend_target(Core CONDITION
+-        PUBLIC_LIBRARIES ${FWUniformTypeIdentifiers}
++        PUBLIC_LIBRARIES ${FWUniformTypeIdentifiersWeak}
+     )
+ endif()
+ 
 diff --git a/qtbase/src/corelib/global/qsysinfo.cpp b/qtbase/src/corelib/global/qsysinfo.cpp
 index ae762c0cc6d..9171a5736b4 100644
 --- a/qtbase/src/corelib/global/qsysinfo.cpp
@@ -624,6 +652,19 @@ index d13b23761ec..107ca45d861 100644
              }
  
              if (themeFontVariants.isEmpty()) {
+diff --git a/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt b/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
+index daaccf365f0..73450b9fbaa 100644
+--- a/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
++++ b/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
+@@ -57,7 +57,7 @@ qt_internal_add_plugin(QCocoaIntegrationPlugin
+         ${FWIOSurface}
+         ${FWMetal}
+         ${FWQuartzCore}
+-        ${FWUniformTypeIdentifiers}
++        ${FWUniformTypeIdentifiersWeak}
+         Qt::Core
+         Qt::CorePrivate
+         Qt::Gui
 diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm b/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm
 index 64df903edcb..c924b388460 100644
 --- a/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm
