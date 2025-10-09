@@ -112,6 +112,80 @@ index 4aa35f3920f..1d32c0fcacb 100644
  
      switch (status) {
      case CLAccuracyAuthorizationFullAccuracy:
+diff --git a/qtbase/src/gui/platform/darwin/qappleiconengine.mm b/qtbase/src/gui/platform/darwin/qappleiconengine.mm
+index 84e9ff4ea39..3206184e4f3 100644
+--- a/qtbase/src/gui/platform/darwin/qappleiconengine.mm
++++ b/qtbase/src/gui/platform/darwin/qappleiconengine.mm
+@@ -21,7 +21,7 @@ QT_BEGIN_NAMESPACE
+ using namespace Qt::StringLiterals;
+ 
+ namespace {
+-auto *loadImage(const QString &iconName)
++auto *loadImage(const QString &iconName) API_AVAILABLE(macos(11.0))
+ {
+     static constexpr std::pair<QLatin1StringView, NSString *> iconMap[] = {
+         {"address-book-new"_L1, @"book.closed"},
+@@ -319,7 +319,7 @@ bool QAppleIconEngine::isNull()
+     return m_image == nullptr;
+ }
+ 
+-QList<QSize> QAppleIconEngine::availableIconSizes(double aspectRatio)
++QList<QSize> QAppleIconEngineUtils::availableIconSizes(double aspectRatio)
+ {
+     const qreal devicePixelRatio = qGuiApp->devicePixelRatio();
+     const QList<QSize> sizes = {
+@@ -335,7 +335,7 @@ QList<QSize> QAppleIconEngine::availableIconSizes(double aspectRatio)
+ QList<QSize> QAppleIconEngine::availableSizes(QIcon::Mode, QIcon::State)
+ {
+     const double aspectRatio = isNull() ? 1.0 : m_image.size.width / m_image.size.height;
+-    return availableIconSizes(aspectRatio);
++    return QAppleIconEngineUtils::availableIconSizes(aspectRatio);
+ }
+ 
+ QSize QAppleIconEngine::actualSize(const QSize &size, QIcon::Mode /*mode*/, QIcon::State /*state*/)
+@@ -357,7 +357,7 @@ QPixmap QAppleIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::Sta
+ 
+ namespace {
+ #if defined(Q_OS_MACOS)
+-auto *configuredImage(const NSImage *image, const QColor &color)
++auto *configuredImage(const NSImage *image, const QColor &color) API_AVAILABLE(macos(11.0))
+ {
+     auto *config = [NSImageSymbolConfiguration configurationWithPointSize:48
+                                                weight:NSFontWeightRegular
+diff --git a/qtbase/src/gui/platform/darwin/qappleiconengine_p.h b/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
+index d99c60ffc54..c2c5c8b190e 100644
+--- a/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
++++ b/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
+@@ -26,7 +26,7 @@ Q_FORWARD_DECLARE_OBJC_CLASS(NSImage);
+ 
+ QT_BEGIN_NAMESPACE
+ 
+-class Q_GUI_EXPORT QAppleIconEngine : public QIconEngine
++class Q_GUI_EXPORT API_AVAILABLE(macos(11.0)) QAppleIconEngine : public QIconEngine
+ {
+ public:
+     QAppleIconEngine(const QString &iconName);
+@@ -42,8 +42,6 @@ public:
+     QPixmap scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state, qreal scale) override;
+     void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) override;
+ 
+-    static QList<QSize> availableIconSizes(double aspectRatio = 1.0);
+-
+ private:
+     const QString m_iconName;
+ #if defined(Q_OS_MACOS)
+@@ -72,6 +70,11 @@ private:
+     mutable QHash<CacheKey, QPixmap> m_cache;
+ };
+ 
++class Q_GUI_EXPORT QAppleIconEngineUtils
++{
++public:
++    static QList<QSize> availableIconSizes(double aspectRatio = 1.0);
++};
+ 
+ QT_END_NAMESPACE
+ 
 diff --git a/qtbase/src/gui/platform/darwin/qapplekeymapper.mm b/qtbase/src/gui/platform/darwin/qapplekeymapper.mm
 index 214865864ff..7169e1f077d 100644
 --- a/qtbase/src/gui/platform/darwin/qapplekeymapper.mm
@@ -833,6 +907,40 @@ index 05e3c67528e..082256b4507 100644
  QT_BEGIN_NAMESPACE
  
  void QCocoaSystemTrayIcon::init()
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm b/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
+index 0e6c4e4f490..0368980abd6 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
+@@ -408,7 +408,7 @@ public:
+         QAbstractFileIconEngine(info, opts) {}
+ 
+     QList<QSize> availableSizes(QIcon::Mode = QIcon::Normal, QIcon::State = QIcon::Off) override
+-    { return QAppleIconEngine::availableIconSizes(); }
++    { return QAppleIconEngineUtils::availableIconSizes(); }
+ 
+ protected:
+     QPixmap filePixmap(const QSize &size, QIcon::Mode, QIcon::State) override
+@@ -429,7 +429,10 @@ QIcon QCocoaTheme::fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptio
+ 
+ QIconEngine *QCocoaTheme::createIconEngine(const QString &iconName) const
+ {
+-    return new QAppleIconEngine(iconName);
++    if (@available(macOS 11.0, *))
++        return new QAppleIconEngine(iconName);
++    else
++        return nullptr;
+ }
+ 
+ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
+@@ -445,7 +448,7 @@ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
+         return QVariant([[NSApplication sharedApplication] isFullKeyboardAccessEnabled] ?
+                     int(Qt::TabFocusAllControls) : int(Qt::TabFocusTextControls | Qt::TabFocusListControls));
+     case IconPixmapSizes:
+-        return QVariant::fromValue(QAppleIconEngine::availableIconSizes());
++        return QVariant::fromValue(QAppleIconEngineUtils::availableIconSizes());
+     case QPlatformTheme::PasswordMaskCharacter:
+         return QVariant(QChar(0x2022));
+     case QPlatformTheme::UiEffects:
 diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm b/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm
 index 6b33d94d58c..a075eb216ce 100644
 --- a/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm
