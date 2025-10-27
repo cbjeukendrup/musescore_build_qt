@@ -48,7 +48,7 @@ jobs:
         run: |
           zip -r "../Qt-6.2.8-macOS.zip" .
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: "Qt-6.2.8-macOS"
           path: "Qt-6.2.8-macOS.zip"
