@@ -8,32 +8,27 @@ jobs:
     runs-on: macos-latest
     env:
       MACOSX_DEPLOYMENT_TARGET: "10.15.4"
-      QT_SUBMODULES: "qt5compat,qtbase,qtdeclarative,qtgraphs,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtshadertools,qtsvg,qttools,qttranslations,qtwebsockets"
     steps:
       - uses: actions/checkout@v5
       - name: Download and unpack source
         run: |
           set -o pipefail
-          mkdir src
-          IFS="," read -r -a SUBMODULE_ARRAY <<< "$QT_SUBMODULES"
-          for submodule in "${SUBMODULE_ARRAY[@]}"; do
-            QT_URL="https://download.qt.io/archive/qt/6.10/6.10.0/submodules/${submodule}-everywhere-src-6.10.0.tar.xz"
-            wget -q "${QT_URL}" -O - | tar xJvf -
-            mv "${submodule}-everywhere-src-6.10.0" "src/${submodule}"
-          done
+          QT_URL="https://download.qt.io/archive/qt/6.10/6.10.0/single/qt-everywhere-src-6.10.0.tar.xz"
+          wget -q "${QT_URL}" -O - | tar xJvf -
+          mv qt-everywhere-src-6.10.0 sources
       - name: Patch
         run: |
-          patch -d src < patches/qt6.10.0_macos_10_15.diff
+          patch -d sources < patches/qt6.10.0_macos_10_15.diff
       - name: Configure
         run: |
           mkdir build
           cd build
-          ../src/configure \
+          ../sources/configure \
             -prefix ../install \
             -release \
             -nomake examples \
             -nomake tests \
-            -submodules $QT_SUBMODULES \
+            -submodules qt5compat,qtbase,qtdeclarative,qtgraphs,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtshadertools,qtsvg,qttools,qttranslations,qtwebsockets \
             -- \
             -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET

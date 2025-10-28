@@ -1377,3 +1377,38 @@ index 3f420cbc0..b1bac617b 100644
              double g;
              CFNumberGetValue(gamma, kCFNumberFloat32Type, &g);
              // These are best fit values given what we have in our enum
+Submodule qtpositioning contains modified content
+diff --git a/qtpositioning/src/plugins/position/corelocation/qgeopositioninfosource_cl.mm b/qtpositioning/src/plugins/position/corelocation/qgeopositioninfosource_cl.mm
+index 95d51a86..38db754a 100644
+--- a/qtpositioning/src/plugins/position/corelocation/qgeopositioninfosource_cl.mm
++++ b/qtpositioning/src/plugins/position/corelocation/qgeopositioninfosource_cl.mm
+@@ -30,12 +30,13 @@
+     return self;
+ }
+ 
+-- (void)locationManagerDidChangeAuthorization: (CLLocationManager *)manager
++- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status
+ {
++    Q_UNUSED(manager);
+     // Since Qt 6.6 the application requests the desired permissions.
+     // This delegate method is invoked always upon CLLocationManager
+     // instantiation, and later if authorization status changes.
+-    m_positionInfoSource->changeAuthorizationStatus([manager authorizationStatus]);
++    m_positionInfoSource->changeAuthorizationStatus(status);
+ }
+ 
+ - (void)locationManager:(CLLocationManager *)manager didUpdateToLocation:(CLLocation *)newLocation fromLocation:(CLLocation *)oldLocation
+Submodule qtserialport contains modified content
+diff --git a/qtserialport/src/serialport/qserialportinfo_osx.cpp b/qtserialport/src/serialport/qserialportinfo_osx.cpp
+index c0f2a280..203b084c 100644
+--- a/qtserialport/src/serialport/qserialportinfo_osx.cpp
++++ b/qtserialport/src/serialport/qserialportinfo_osx.cpp
+@@ -123,7 +123,7 @@ QList<QSerialPortInfo> QSerialPortInfo::availablePorts()
+                            CFSTR(kIOSerialBSDAllTypes));
+ 
+     io_iterator_t serialPortIterator = 0;
+-    if (::IOServiceGetMatchingServices(kIOMainPortDefault, serialPortDictionary,
++    if (::IOServiceGetMatchingServices(kIOMasterPortDefault, serialPortDictionary,
+                                        &serialPortIterator) != KERN_SUCCESS) {
+         return QList<QSerialPortInfo>();
+     }
