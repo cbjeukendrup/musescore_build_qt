@@ -1,0 +1,1379 @@
+Submodule qtbase contains modified content
+diff --git a/qtbase/cmake/QtFrameworkHelpers.cmake b/qtbase/cmake/QtFrameworkHelpers.cmake
+index 1982937aaf8..7c244cd589f 100644
+--- a/qtbase/cmake/QtFrameworkHelpers.cmake
++++ b/qtbase/cmake/QtFrameworkHelpers.cmake
+@@ -58,8 +58,10 @@ function(qt_internal_find_apple_system_framework out_var framework_name)
+ 
+     if(${cache_var_name} AND ${cache_var_name} MATCHES ".framework$")
+         set(${out_var} "-framework ${framework_name}" PARENT_SCOPE)
++        set(${out_var}Weak "-weak_framework ${framework_name}" PARENT_SCOPE)
+     else()
+         set(${out_var} "${out_var}-NOTFOUND" PARENT_SCOPE)
++        set(${out_var}Weak "${out_var}Weak-NOTFOUND" PARENT_SCOPE)
+     endif()
+ endfunction()
+ 
+diff --git a/qtbase/src/corelib/CMakeLists.txt b/qtbase/src/corelib/CMakeLists.txt
+index 36fbfede3df..ec005467b89 100644
+--- a/qtbase/src/corelib/CMakeLists.txt
++++ b/qtbase/src/corelib/CMakeLists.txt
+@@ -743,7 +743,7 @@ qt_internal_extend_target(Core CONDITION UNIX
+ if(APPLE)
+     set_source_files_properties(io/qfilesystemengine_unix.cpp PROPERTIES LANGUAGE OBJCXX)
+     qt_internal_extend_target(Core CONDITION
+-        PUBLIC_LIBRARIES ${FWUniformTypeIdentifiers}
++        PUBLIC_LIBRARIES ${FWUniformTypeIdentifiersWeak}
+     )
+ endif()
+ 
+diff --git a/qtbase/src/corelib/global/qsysinfo.cpp b/qtbase/src/corelib/global/qsysinfo.cpp
+index e5bba170ed4..3d5e8b403c4 100644
+--- a/qtbase/src/corelib/global/qsysinfo.cpp
++++ b/qtbase/src/corelib/global/qsysinfo.cpp
+@@ -1027,7 +1027,7 @@ QByteArray QSysInfo::machineUniqueId()
+ {
+ #if defined(Q_OS_DARWIN) && __has_include(<IOKit/IOKitLib.h>)
+     char uuid[UuidStringLen + 1];
+-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
++    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+     QCFString stringRef = (CFStringRef)IORegistryEntryCreateCFProperty(service, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
+     CFStringGetCString(stringRef, uuid, sizeof(uuid), kCFStringEncodingMacRoman);
+     return QByteArray(uuid);
+diff --git a/qtbase/src/corelib/io/qfilesystemengine_unix.cpp b/qtbase/src/corelib/io/qfilesystemengine_unix.cpp
+index 32818949016..fc5f5cac274 100644
+--- a/qtbase/src/corelib/io/qfilesystemengine_unix.cpp
++++ b/qtbase/src/corelib/io/qfilesystemengine_unix.cpp
+@@ -147,10 +147,18 @@ static bool isPackage(const QFileSystemMetaData &data, const QFileSystemEntry &e
+     QString suffix = info.suffix();
+ 
+     if (suffix.length() > 0) {
+-        // First step: is it a bundle?
+-        const auto *utType = [UTType typeWithFilenameExtension:suffix.toNSString()];
+-        if ([utType conformsToType:UTTypeBundle])
+-            return true;
++        if (__builtin_available(macOS 11.0, *)) {
++            // First step: is it a bundle?
++            const auto *utType = [UTType typeWithFilenameExtension:suffix.toNSString()];
++            if ([utType conformsToType:UTTypeBundle])
++                return true;
++        } else {
++            // First step: is the extension known ?
++            QCFType<CFStringRef> extensionRef = suffix.toCFString();
++            QCFType<CFStringRef> uniformTypeIdentifier = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, extensionRef, NULL);
++            if (UTTypeConformsTo(uniformTypeIdentifier, kUTTypeBundle))
++                return true;
++        }
+ 
+         // Second step: check if an application knows the package type
+         QCFType<CFStringRef> path = entry.filePath().toCFString();
+diff --git a/qtbase/src/corelib/kernel/qcore_mac.mm b/qtbase/src/corelib/kernel/qcore_mac.mm
+index db81108baef..8eca97ac5d7 100644
+--- a/qtbase/src/corelib/kernel/qcore_mac.mm
++++ b/qtbase/src/corelib/kernel/qcore_mac.mm
+@@ -367,7 +367,7 @@ std::optional<uint32_t> qt_mac_sipConfiguration()
+             return config;
+ #endif
+ 
+-        QIOType<io_registry_entry_t> nvram = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/options");
++        QIOType<io_registry_entry_t> nvram = IORegistryEntryFromPath(kIOMasterPortDefault, "IODeviceTree:/options");
+         if (!nvram) {
+             qWarning("Failed to locate NVRAM entry in IO registry");
+             return {};
+@@ -838,4 +838,3 @@ NSObject *QObjCWeakPointerBase::get() const
+ // -------------------------------------------------------------------------
+ 
+ QT_END_NAMESPACE
+-
+diff --git a/qtbase/src/corelib/platform/darwin/qdarwinpermissionplugin_location.mm b/qtbase/src/corelib/platform/darwin/qdarwinpermissionplugin_location.mm
+index c43cc1fe865..0ab69dc2136 100644
+--- a/qtbase/src/corelib/platform/darwin/qdarwinpermissionplugin_location.mm
++++ b/qtbase/src/corelib/platform/darwin/qdarwinpermissionplugin_location.mm
+@@ -107,15 +107,19 @@ struct PermissionRequest
+ 
+ - (CLAuthorizationStatus)authorizationStatus
+ {
+-    if (self.manager)
+-        return self.manager.authorizationStatus;
++    if (self.manager) {
++        if (@available(macOS 11, iOS 14, *))
++            return self.manager.authorizationStatus;
++    }
+ 
+     return QT_IGNORE_DEPRECATIONS(CLLocationManager.authorizationStatus);
+ }
+ 
+ - (Qt::PermissionStatus)accuracyAuthorization:(QLocationPermission)permission
+ {
+-    auto status = self.manager.accuracyAuthorization;
++    auto status = CLAccuracyAuthorizationReducedAccuracy;
++    if (@available(macOS 11, iOS 14, *))
++        status = self.manager.accuracyAuthorization;
+ 
+     switch (status) {
+     case CLAccuracyAuthorizationFullAccuracy:
+diff --git a/qtbase/src/gui/platform/darwin/qappleiconengine.mm b/qtbase/src/gui/platform/darwin/qappleiconengine.mm
+index 7745cfb6ce5..6810d35a8e5 100644
+--- a/qtbase/src/gui/platform/darwin/qappleiconengine.mm
++++ b/qtbase/src/gui/platform/darwin/qappleiconengine.mm
+@@ -21,7 +21,7 @@ QT_BEGIN_NAMESPACE
+ using namespace Qt::StringLiterals;
+ 
+ namespace {
+-auto *loadImage(const QString &iconName)
++auto *loadImage(const QString &iconName) API_AVAILABLE(macos(11.0))
+ {
+     static constexpr std::pair<QLatin1StringView, NSString *> iconMap[] = {
+         {"address-book-new"_L1, @"book.closed"},
+@@ -320,7 +320,7 @@ bool QAppleIconEngine::isNull()
+     return m_image == nullptr;
+ }
+ 
+-QList<QSize> QAppleIconEngine::availableIconSizes(double aspectRatio)
++QList<QSize> QAppleIconEngineUtils::availableIconSizes(double aspectRatio)
+ {
+     const qreal devicePixelRatio = qGuiApp->devicePixelRatio();
+     const QList<QSize> sizes = {
+@@ -336,7 +336,7 @@ QList<QSize> QAppleIconEngine::availableIconSizes(double aspectRatio)
+ QList<QSize> QAppleIconEngine::availableSizes(QIcon::Mode, QIcon::State)
+ {
+     const double aspectRatio = isNull() ? 1.0 : m_image.size.width / m_image.size.height;
+-    return availableIconSizes(aspectRatio);
++    return QAppleIconEngineUtils::availableIconSizes(aspectRatio);
+ }
+ 
+ QSize QAppleIconEngine::actualSize(const QSize &size, QIcon::Mode /*mode*/, QIcon::State /*state*/)
+@@ -358,7 +358,7 @@ QPixmap QAppleIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::Sta
+ 
+ namespace {
+ #if defined(Q_OS_MACOS)
+-auto *configuredImage(const NSImage *image, const QColor &color)
++auto *configuredImage(const NSImage *image, const QColor &color) API_AVAILABLE(macos(11.0))
+ {
+     auto *config = [NSImageSymbolConfiguration configurationWithPointSize:48
+                                                weight:NSFontWeightRegular
+diff --git a/qtbase/src/gui/platform/darwin/qappleiconengine_p.h b/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
+index d99c60ffc54..c2c5c8b190e 100644
+--- a/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
++++ b/qtbase/src/gui/platform/darwin/qappleiconengine_p.h
+@@ -26,7 +26,7 @@ Q_FORWARD_DECLARE_OBJC_CLASS(NSImage);
+ 
+ QT_BEGIN_NAMESPACE
+ 
+-class Q_GUI_EXPORT QAppleIconEngine : public QIconEngine
++class Q_GUI_EXPORT API_AVAILABLE(macos(11.0)) QAppleIconEngine : public QIconEngine
+ {
+ public:
+     QAppleIconEngine(const QString &iconName);
+@@ -42,8 +42,6 @@ public:
+     QPixmap scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state, qreal scale) override;
+     void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) override;
+ 
+-    static QList<QSize> availableIconSizes(double aspectRatio = 1.0);
+-
+ private:
+     const QString m_iconName;
+ #if defined(Q_OS_MACOS)
+@@ -72,6 +70,11 @@ private:
+     mutable QHash<CacheKey, QPixmap> m_cache;
+ };
+ 
++class Q_GUI_EXPORT QAppleIconEngineUtils
++{
++public:
++    static QList<QSize> availableIconSizes(double aspectRatio = 1.0);
++};
+ 
+ QT_END_NAMESPACE
+ 
+diff --git a/qtbase/src/gui/platform/darwin/qapplekeymapper.mm b/qtbase/src/gui/platform/darwin/qapplekeymapper.mm
+index 214865864ff..7169e1f077d 100644
+--- a/qtbase/src/gui/platform/darwin/qapplekeymapper.mm
++++ b/qtbase/src/gui/platform/darwin/qapplekeymapper.mm
+@@ -457,21 +457,23 @@ const QAppleKeyMapper::KeyMap &QAppleKeyMapper::keyMapForKey(VirtualKeyCode virt
+         if (err == noErr && actualStringLength)
+             carbonUnicodeKey = QChar(unicodeString[0]);
+ 
+-        if (canMapCocoaEvent) {
+-            // Until we've verified that the Cocoa API works as expected
+-            // we first run the event through the Carbon APIs and then
+-            // compare the results to Cocoa.
+-            auto cocoaModifiers = toCocoaModifiers(qtModifiers);
+-            auto *charactersWithModifiers = [NSApp.currentEvent charactersByApplyingModifiers:cocoaModifiers];
+-
+-            QChar cocoaUnicodeKey;
+-            if (charactersWithModifiers.length > 0)
+-                cocoaUnicodeKey = QChar([charactersWithModifiers characterAtIndex:0]);
+-
+-            if (cocoaUnicodeKey != carbonUnicodeKey) {
+-                qCWarning(lcQpaKeyMapper) << "Mismatch between Cocoa" << cocoaUnicodeKey
+-                    << "and Carbon" << carbonUnicodeKey << "for virtual key" << virtualKey
+-                    << "with" << qtModifiers;
++        if (@available(macOS 10.15, *)) {
++            if (canMapCocoaEvent) {
++                // Until we've verified that the Cocoa API works as expected
++                // we first run the event through the Carbon APIs and then
++                // compare the results to Cocoa.
++                auto cocoaModifiers = toCocoaModifiers(qtModifiers);
++                auto *charactersWithModifiers = [NSApp.currentEvent charactersByApplyingModifiers:cocoaModifiers];
++
++                QChar cocoaUnicodeKey;
++                if (charactersWithModifiers.length > 0)
++                    cocoaUnicodeKey = QChar([charactersWithModifiers characterAtIndex:0]);
++
++                if (cocoaUnicodeKey != carbonUnicodeKey) {
++                    qCWarning(lcQpaKeyMapper) << "Mismatch between Cocoa" << cocoaUnicodeKey
++                        << "and Carbon" << carbonUnicodeKey << "for virtual key" << virtualKey
++                        << "with" << qtModifiers;
++                }
+             }
+         }
+ 
+diff --git a/qtbase/src/gui/platform/darwin/qutimimeconverter.mm b/qtbase/src/gui/platform/darwin/qutimimeconverter.mm
+index 294a617f3b0..19487393232 100644
+--- a/qtbase/src/gui/platform/darwin/qutimimeconverter.mm
++++ b/qtbase/src/gui/platform/darwin/qutimimeconverter.mm
+@@ -785,7 +785,7 @@ QList<QByteArray> QMacMimeTiff::convertFromMime(const QString &mime,
+ 
+     QCFType<CFMutableDataRef> data = CFDataCreateMutable(0, 0);
+     QCFType<CGImageDestinationRef> imageDestination = CGImageDestinationCreateWithData(data,
+-                                                        (CFStringRef)UTTypeTIFF.identifier, 1, 0);
++                                                        kUTTypeTIFF, 1, 0);
+ 
+     if (!imageDestination)
+         return QList<QByteArray>();
+diff --git a/qtbase/src/gui/platform/macos/qmacstyle_p.h b/qtbase/src/gui/platform/macos/qmacstyle_p.h
+index bbfbc1a06e3..b40adafc4c9 100644
+--- a/qtbase/src/gui/platform/macos/qmacstyle_p.h
++++ b/qtbase/src/gui/platform/macos/qmacstyle_p.h
+@@ -51,28 +51,40 @@ public:
+     void drawPrimitive(typename Style::PrimitiveElement pe, const QStyleOption *opt, QPainter *p
+                        OPTIONAL_WIDGET_ARGUMENT) const override
+     {
++        if (__builtin_available(macOS 11, *))
+         [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
+             Style::drawPrimitive(pe, opt, p
+                 FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+         }];
++        else
++            Style::drawPrimitive(pe, opt, p
++                FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+     }
+ 
+     void drawControl(typename Style::ControlElement element, const QStyleOption *opt, QPainter *p
+                      OPTIONAL_WIDGET_ARGUMENT) const override
+     {
++        if (__builtin_available(macOS 11, *))
+         [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
+             Style::drawControl(element, opt, p
+                 FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+         }];
++        else
++            Style::drawControl(element, opt, p
++                FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+     }
+ 
+     void drawComplexControl(typename Style::ComplexControl cc, const QStyleOptionComplex *opt, QPainter *p
+                             OPTIONAL_WIDGET_ARGUMENT) const override
+     {
++        if (__builtin_available(macOS 11, *))
+         [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
+             Style::drawComplexControl(cc, opt, p
+                 FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+         }];
++        else
++            Style::drawComplexControl(cc, opt, p
++                FORWARD_OPTIONAL_WIDGET_ARGUMENT);
+     }
+ };
+ 
+diff --git a/qtbase/src/gui/rhi/qrhimetal.mm b/qtbase/src/gui/rhi/qrhimetal.mm
+index d6d3dfa0cdb..620f2db57d3 100644
+--- a/qtbase/src/gui/rhi/qrhimetal.mm
++++ b/qtbase/src/gui/rhi/qrhimetal.mm
+@@ -539,18 +539,21 @@ bool QRhiMetalData::setupBinaryArchive(NSURL *sourceFileUrl)
+     return false;
+ #endif
+ 
+-    [binArch release];
+-    MTLBinaryArchiveDescriptor *binArchDesc = [MTLBinaryArchiveDescriptor new];
+-    binArchDesc.url = sourceFileUrl;
+-    NSError *err = nil;
+-    binArch = [dev newBinaryArchiveWithDescriptor: binArchDesc error: &err];
+-    [binArchDesc release];
+-    if (!binArch) {
+-        const QString msg = QString::fromNSString(err.localizedDescription);
+-        qWarning("newBinaryArchiveWithDescriptor failed: %s", qPrintable(msg));
+-        return false;
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        [binArch release];
++        MTLBinaryArchiveDescriptor *binArchDesc = [MTLBinaryArchiveDescriptor new];
++        binArchDesc.url = sourceFileUrl;
++        NSError *err = nil;
++        binArch = [dev newBinaryArchiveWithDescriptor: binArchDesc error: &err];
++        [binArchDesc release];
++        if (!binArch) {
++            const QString msg = QString::fromNSString(err.localizedDescription);
++            qWarning("newBinaryArchiveWithDescriptor failed: %s", qPrintable(msg));
++            return false;
++        }
++        return true;
+     }
+-    return true;
++    return false;
+ }
+ 
+ bool QRhiMetal::create(QRhi::Flags flags)
+@@ -673,8 +676,10 @@ void QRhiMetal::destroy()
+     [d->captureScope release];
+     d->captureScope = nil;
+ 
+-    [d->binArch release];
+-    d->binArch = nil;
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        [d->binArch release];
++        d->binArch = nil;
++    }
+ 
+     [d->cmdQueue release];
+     if (!importedCmdQueue)
+@@ -827,7 +832,12 @@ bool QRhiMetal::isFeatureSupported(QRhi::Feature feature) const
+     case QRhi::ReadBackAnyTextureFormat:
+         return true;
+     case QRhi::PipelineCacheDataLoadSave:
+-        return true;
++    {
++        if (@available(macOS 11.0, iOS 14.0, *))
++            return true;
++        else
++            return false;
++    }
+     case QRhi::ImageDataStride:
+         return true;
+     case QRhi::RenderBufferImport:
+@@ -971,52 +981,54 @@ QByteArray QRhiMetal::pipelineCacheData()
+ {
+     Q_STATIC_ASSERT(sizeof(QMetalPipelineCacheDataHeader) == 256);
+     QByteArray data;
+-    if (!d->binArch || !rhiFlags.testFlag(QRhi::EnablePipelineCacheDataSave))
+-        return data;
+-
+-    QTemporaryFile tmp;
+-    if (!tmp.open()) {
+-        qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to create temporary file for Metal");
+-        return data;
+-    }
+-    tmp.close(); // the file exists until the tmp dtor runs
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        if (!d->binArch || !rhiFlags.testFlag(QRhi::EnablePipelineCacheDataSave))
++            return data;
++
++        QTemporaryFile tmp;
++        if (!tmp.open()) {
++            qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to create temporary file for Metal");
++            return data;
++        }
++        tmp.close(); // the file exists until the tmp dtor runs
+ 
+-    const QString fn = QFileInfo(tmp.fileName()).absoluteFilePath();
+-    NSURL *url = QUrl::fromLocalFile(fn).toNSURL();
+-    NSError *err = nil;
+-    if (![d->binArch serializeToURL: url error: &err]) {
+-        const QString msg = QString::fromNSString(err.localizedDescription);
+-        // Some of these "errors" are not actual errors. (think of "Nothing to serialize")
+-        qCDebug(QRHI_LOG_INFO, "Failed to serialize MTLBinaryArchive: %s", qPrintable(msg));
+-        return data;
+-    }
++        const QString fn = QFileInfo(tmp.fileName()).absoluteFilePath();
++        NSURL *url = QUrl::fromLocalFile(fn).toNSURL();
++        NSError *err = nil;
++        if (![d->binArch serializeToURL: url error: &err]) {
++            const QString msg = QString::fromNSString(err.localizedDescription);
++            // Some of these "errors" are not actual errors. (think of "Nothing to serialize")
++            qCDebug(QRHI_LOG_INFO, "Failed to serialize MTLBinaryArchive: %s", qPrintable(msg));
++            return data;
++        }
+ 
+-    QFile f(fn);
+-    if (!f.open(QIODevice::ReadOnly)) {
+-        qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to reopen temporary file");
+-        return data;
+-    }
+-    const QByteArray blob = f.readAll();
+-    f.close();
++        QFile f(fn);
++        if (!f.open(QIODevice::ReadOnly)) {
++            qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to reopen temporary file");
++            return data;
++        }
++        const QByteArray blob = f.readAll();
++        f.close();
+ 
+-    const size_t headerSize = sizeof(QMetalPipelineCacheDataHeader);
+-    const quint32 dataSize = quint32(blob.size());
++        const size_t headerSize = sizeof(QMetalPipelineCacheDataHeader);
++        const quint32 dataSize = quint32(blob.size());
+ 
+-    data.resize(headerSize + dataSize);
++        data.resize(headerSize + dataSize);
+ 
+-    QMetalPipelineCacheDataHeader header = {};
+-    header.rhiId = pipelineCacheRhiId();
+-    header.arch = quint32(sizeof(void*));
+-    header.dataSize = quint32(dataSize);
+-    header.osMajor = osMajor;
+-    header.osMinor = osMinor;
+-    const size_t driverStrLen = qMin(sizeof(header.driver) - 1, size_t(driverInfoStruct.deviceName.length()));
+-    if (driverStrLen)
+-        memcpy(header.driver, driverInfoStruct.deviceName.constData(), driverStrLen);
+-    header.driver[driverStrLen] = '\0';
++        QMetalPipelineCacheDataHeader header = {};
++        header.rhiId = pipelineCacheRhiId();
++        header.arch = quint32(sizeof(void*));
++        header.dataSize = quint32(dataSize);
++        header.osMajor = osMajor;
++        header.osMinor = osMinor;
++        const size_t driverStrLen = qMin(sizeof(header.driver) - 1, size_t(driverInfoStruct.deviceName.length()));
++        if (driverStrLen)
++            memcpy(header.driver, driverInfoStruct.deviceName.constData(), driverStrLen);
++        header.driver[driverStrLen] = '\0';
+ 
+-    memcpy(data.data(), &header, headerSize);
+-    memcpy(data.data() + headerSize, blob.constData(), dataSize);
++        memcpy(data.data(), &header, headerSize);
++        memcpy(data.data() + headerSize, blob.constData(), dataSize);
++    }
+     return data;
+ }
+ 
+@@ -1066,20 +1078,22 @@ void QRhiMetal::setPipelineCacheData(const QByteArray &data)
+         return;
+     }
+ 
+-    const char *p = data.constData() + dataOffset;
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        const char *p = data.constData() + dataOffset;
+ 
+-    QTemporaryFile tmp;
+-    if (!tmp.open()) {
+-        qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to create temporary file for Metal");
+-        return;
+-    }
+-    tmp.write(p, header.dataSize);
+-    tmp.close(); // the file exists until the tmp dtor runs
++        QTemporaryFile tmp;
++        if (!tmp.open()) {
++            qCDebug(QRHI_LOG_INFO, "pipelineCacheData: Failed to create temporary file for Metal");
++            return;
++        }
++        tmp.write(p, header.dataSize);
++        tmp.close(); // the file exists until the tmp dtor runs
+ 
+-    const QString fn = QFileInfo(tmp.fileName()).absoluteFilePath();
+-    NSURL *url = QUrl::fromLocalFile(fn).toNSURL();
+-    if (d->setupBinaryArchive(url))
+-        qCDebug(QRHI_LOG_INFO, "Created MTLBinaryArchive with initial data of %u bytes", header.dataSize);
++        const QString fn = QFileInfo(tmp.fileName()).absoluteFilePath();
++        NSURL *url = QUrl::fromLocalFile(fn).toNSURL();
++        if (d->setupBinaryArchive(url))
++            qCDebug(QRHI_LOG_INFO, "Created MTLBinaryArchive with initial data of %u bytes", header.dataSize);
++    }
+ }
+ 
+ QRhiRenderBuffer *QRhiMetal::createRenderBuffer(QRhiRenderBuffer::Type type, const QSize &pixelSize,
+@@ -3615,88 +3629,122 @@ static inline MTLPixelFormat toMetalTextureFormat(QRhiTexture::Format format, QR
+         return srgb ? MTLPixelFormatASTC_12x12_sRGB : MTLPixelFormatASTC_12x12_LDR;
+ #else
+     case QRhiTexture::ETC2_RGB8:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatETC2_RGB8_sRGB : MTLPixelFormatETC2_RGB8;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatETC2_RGB8_sRGB : MTLPixelFormatETC2_RGB8;
++        }
+         qWarning("QRhiMetal: ETC2 compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ETC2_RGB8A1:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatETC2_RGB8A1_sRGB : MTLPixelFormatETC2_RGB8A1;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatETC2_RGB8A1_sRGB : MTLPixelFormatETC2_RGB8A1;
++        }
+         qWarning("QRhiMetal: ETC2 compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ETC2_RGBA8:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatEAC_RGBA8_sRGB : MTLPixelFormatEAC_RGBA8;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatEAC_RGBA8_sRGB : MTLPixelFormatEAC_RGBA8;
++        }
+         qWarning("QRhiMetal: ETC2 compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_4x4:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_4x4_sRGB : MTLPixelFormatASTC_4x4_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_4x4_sRGB : MTLPixelFormatASTC_4x4_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_5x4:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_5x4_sRGB : MTLPixelFormatASTC_5x4_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_5x4_sRGB : MTLPixelFormatASTC_5x4_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_5x5:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_5x5_sRGB : MTLPixelFormatASTC_5x5_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_5x5_sRGB : MTLPixelFormatASTC_5x5_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_6x5:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_6x5_sRGB : MTLPixelFormatASTC_6x5_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_6x5_sRGB : MTLPixelFormatASTC_6x5_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_6x6:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_6x6_sRGB : MTLPixelFormatASTC_6x6_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_6x6_sRGB : MTLPixelFormatASTC_6x6_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_8x5:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_8x5_sRGB : MTLPixelFormatASTC_8x5_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_8x5_sRGB : MTLPixelFormatASTC_8x5_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_8x6:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_8x6_sRGB : MTLPixelFormatASTC_8x6_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_8x6_sRGB : MTLPixelFormatASTC_8x6_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_8x8:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_8x8_sRGB : MTLPixelFormatASTC_8x8_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_8x8_sRGB : MTLPixelFormatASTC_8x8_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_10x5:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_10x5_sRGB : MTLPixelFormatASTC_10x5_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_10x5_sRGB : MTLPixelFormatASTC_10x5_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_10x6:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_10x6_sRGB : MTLPixelFormatASTC_10x6_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_10x6_sRGB : MTLPixelFormatASTC_10x6_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_10x8:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_10x8_sRGB : MTLPixelFormatASTC_10x8_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_10x8_sRGB : MTLPixelFormatASTC_10x8_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_10x10:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_10x10_sRGB : MTLPixelFormatASTC_10x10_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_10x10_sRGB : MTLPixelFormatASTC_10x10_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_12x10:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_12x10_sRGB : MTLPixelFormatASTC_12x10_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_12x10_sRGB : MTLPixelFormatASTC_12x10_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+     case QRhiTexture::ASTC_12x12:
+-        if (d->caps.isAppleGPU)
+-            return srgb ? MTLPixelFormatASTC_12x12_sRGB : MTLPixelFormatASTC_12x12_LDR;
++        if (d->caps.isAppleGPU) {
++            if (@available(macOS 11.0, *))
++                return srgb ? MTLPixelFormatASTC_12x12_sRGB : MTLPixelFormatASTC_12x12_LDR;
++        }
+         qWarning("QRhiMetal: ASTC compression not supported on this platform");
+         return MTLPixelFormatInvalid;
+ #endif
+@@ -3764,8 +3812,12 @@ bool QMetalRenderBuffer::create()
+     case DepthStencil:
+ #ifdef Q_OS_MACOS
+         if (rhiD->caps.isAppleGPU) {
+-            desc.storageMode = MTLStorageModeMemoryless;
+-            d->format = MTLPixelFormatDepth32Float_Stencil8;
++            if (@available(macOS 11.0, *)) {
++                desc.storageMode = MTLStorageModeMemoryless;
++                d->format = MTLPixelFormatDepth32Float_Stencil8;
++            } else {
++                Q_UNREACHABLE();
++            }
+         } else {
+             desc.storageMode = MTLStorageModePrivate;
+             d->format = rhiD->d->dev.depth24Stencil8PixelFormatSupported
+@@ -4880,7 +4932,13 @@ id<MTLLibrary> QRhiMetalData::createMetalLib(const QShader &shader, QShader::Var
+         versions << 30;
+     if (@available(macOS 12, iOS 15, *))
+         versions << 24;
+-    versions << 23 << 22 << 21 << 20 << 12;
++    if (@available(macOS 11, iOS 14, *))
++        versions << 23;
++    if (@available(macOS 10.15, iOS 13, *))
++        versions << 22;
++    if (@available(macOS 10.14, iOS 12, *))
++        versions << 21;
++    versions << 20 << 12;
+ 
+     const QList<QShaderKey> shaders = shader.availableShaders();
+ 
+@@ -5095,19 +5153,23 @@ void QMetalGraphicsPipelineData::setupStageInputDescriptor(MTLStageInputOutputDe
+ 
+ void QRhiMetalData::trySeedingRenderPipelineFromBinaryArchive(MTLRenderPipelineDescriptor *rpDesc)
+ {
+-    if (binArch)  {
+-        NSArray *binArchArray = [NSArray arrayWithObjects: binArch, nil];
+-        rpDesc.binaryArchives = binArchArray;
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        if (binArch)  {
++            NSArray *binArchArray = [NSArray arrayWithObjects: binArch, nil];
++            rpDesc.binaryArchives = binArchArray;
++        }
+     }
+ }
+ 
+ void QRhiMetalData::addRenderPipelineToBinaryArchive(MTLRenderPipelineDescriptor *rpDesc)
+ {
+-    if (binArch) {
+-        NSError *err = nil;
+-        if (![binArch addRenderPipelineFunctionsWithDescriptor: rpDesc error: &err]) {
+-            const QString msg = QString::fromNSString(err.localizedDescription);
+-            qWarning("Failed to collect render pipeline functions to binary archive: %s", qPrintable(msg));
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        if (binArch) {
++            NSError *err = nil;
++            if (![binArch addRenderPipelineFunctionsWithDescriptor: rpDesc error: &err]) {
++                const QString msg = QString::fromNSString(err.localizedDescription);
++                qWarning("Failed to collect render pipeline functions to binary archive: %s", qPrintable(msg));
++            }
+         }
+     }
+ }
+@@ -6077,19 +6139,23 @@ void QMetalComputePipeline::destroy()
+ 
+ void QRhiMetalData::trySeedingComputePipelineFromBinaryArchive(MTLComputePipelineDescriptor *cpDesc)
+ {
+-    if (binArch) {
+-        NSArray *binArchArray = [NSArray arrayWithObjects: binArch, nil];
+-        cpDesc.binaryArchives = binArchArray;
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        if (binArch)  {
++            NSArray *binArchArray = [NSArray arrayWithObjects: binArch, nil];
++            cpDesc.binaryArchives = binArchArray;
++        }
+     }
+ }
+ 
+ void QRhiMetalData::addComputePipelineToBinaryArchive(MTLComputePipelineDescriptor *cpDesc)
+ {
+-    if (binArch) {
+-        NSError *err = nil;
+-        if (![binArch addComputePipelineFunctionsWithDescriptor: cpDesc error: &err]) {
+-            const QString msg = QString::fromNSString(err.localizedDescription);
+-            qWarning("Failed to collect compute pipeline functions to binary archive: %s", qPrintable(msg));
++    if (@available(macOS 11.0, iOS 14.0, *)) {
++        if (binArch) {
++            NSError *err = nil;
++            if (![binArch addComputePipelineFunctionsWithDescriptor: cpDesc error: &err]) {
++                const QString msg = QString::fromNSString(err.localizedDescription);
++                qWarning("Failed to collect compute pipeline functions to binary archive: %s", qPrintable(msg));
++            }
+         }
+     }
+ }
+@@ -6362,17 +6428,20 @@ QSize QMetalSwapChain::surfacePixelSize()
+ bool QMetalSwapChain::isFormatSupported(Format f)
+ {
+     if (f == HDRExtendedSrgbLinear) {
+-        if (@available(iOS 16.0, *))
++        if (@available(macOS 11.0, iOS 16.0, *))
+             return hdrInfo().limits.colorComponentValue.maxPotentialColorComponentValue > 1.0f;
+         else
+             return false;
+     } else if (f == HDR10) {
+-        if (@available(iOS 16.0, *))
++        if (@available(macOS 11.0, iOS 16.0, *))
+             return hdrInfo().limits.colorComponentValue.maxPotentialColorComponentValue > 1.0f;
+         else
+             return false;
+     } else if (f == HDRExtendedDisplayP3Linear) {
+-        return hdrInfo().limits.colorComponentValue.maxPotentialColorComponentValue > 1.0f;
++        if (@available(macOS 11.0, iOS 16.0, *))
++            return hdrInfo().limits.colorComponentValue.maxPotentialColorComponentValue > 1.0f;
++        else
++            return false;
+     }
+     return f == SDR;
+ }
+@@ -6464,17 +6533,17 @@ bool QMetalSwapChain::createOrResize()
+         d->layer.pixelFormat = d->colorFormat;
+ 
+     if (m_format == HDRExtendedSrgbLinear) {
+-        if (@available(iOS 16.0, *)) {
++        if (@available(macOS 11.0, iOS 16.0, *)) {
+             d->layer.colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearSRGB);
+             d->layer.wantsExtendedDynamicRangeContent = YES;
+         }
+     } else if (m_format == HDR10) {
+-        if (@available(iOS 16.0, *)) {
++        if (@available(macOS 11.0, iOS 16.0, *)) {
+             d->layer.colorspace = CGColorSpaceCreateWithName(kCGColorSpaceITUR_2100_PQ);
+             d->layer.wantsExtendedDynamicRangeContent = YES;
+         }
+     } else if (m_format == HDRExtendedDisplayP3Linear) {
+-        if (@available(iOS 16.0, *)) {
++        if (@available(macOS 11.0, iOS 16.0, *)) {
+             d->layer.colorspace = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearDisplayP3);
+             d->layer.wantsExtendedDynamicRangeContent = YES;
+         }
+diff --git a/qtbase/src/gui/text/coretext/qcoretextfontdatabase.mm b/qtbase/src/gui/text/coretext/qcoretextfontdatabase.mm
+index d13b23761ec..107ca45d861 100644
+--- a/qtbase/src/gui/text/coretext/qcoretextfontdatabase.mm
++++ b/qtbase/src/gui/text/coretext/qcoretextfontdatabase.mm
+@@ -972,13 +972,15 @@ void QCoreTextFontDatabase::populateThemeFonts()
+             };
+ 
+             // Try populating the font variants based on its UI design trait, if available
+-            auto fontTraits = QCFType<CFDictionaryRef>(CTFontDescriptorCopyAttribute(fontDescriptor, kCTFontTraitsAttribute));
+-            static const NSString *kUIFontDesignTrait = @"NSCTFontUIFontDesignTrait";
+-            if (id uiFontDesignTrait = fontTraits.as<NSDictionary*>()[kUIFontDesignTrait]) {
+-                QCFType<CTFontDescriptorRef> designTraitDescriptor = CTFontDescriptorCreateWithAttributes(
+-                    CFDictionaryRef(@{ (id)kCTFontTraitsAttribute: @{ kUIFontDesignTrait: uiFontDesignTrait }
+-                }));
+-                addFontVariants(designTraitDescriptor);
++            if (@available(macos 10.15, ios 13.0, *)) {
++                auto fontTraits = QCFType<CFDictionaryRef>(CTFontDescriptorCopyAttribute(fontDescriptor, kCTFontTraitsAttribute));
++                static const NSString *kUIFontDesignTrait = @"NSCTFontUIFontDesignTrait";
++                if (id uiFontDesignTrait = fontTraits.as<NSDictionary*>()[kUIFontDesignTrait]) {
++                    QCFType<CTFontDescriptorRef> designTraitDescriptor = CTFontDescriptorCreateWithAttributes(
++                        CFDictionaryRef(@{ (id)kCTFontTraitsAttribute: @{ kUIFontDesignTrait: uiFontDesignTrait }
++                    }));
++                    addFontVariants(designTraitDescriptor);
++                }
+             }
+ 
+             if (themeFontVariants.isEmpty()) {
+diff --git a/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt b/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
+index 07cffb24726..bd94220be9a 100644
+--- a/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
++++ b/qtbase/src/plugins/platforms/cocoa/CMakeLists.txt
+@@ -67,7 +67,7 @@ qt_internal_add_plugin(QCocoaIntegrationPlugin
+         ${FWIOSurface}
+         ${FWMetal}
+         ${FWQuartzCore}
+-        ${FWUniformTypeIdentifiers}
++        ${FWUniformTypeIdentifiersWeak}
+         Qt::Core
+         Qt::CorePrivate
+         Qt::Gui
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm b/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm
+index 0f9df3f17ab..ca9ab392c78 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoadrag.mm
+@@ -169,7 +169,8 @@ bool QCocoaDrag::maybeDragMultipleItems()
+     for (NSPasteboardItem *item in dragBoard.pasteboardItems) {
+         bool isUrl = false;
+         for (NSPasteboardType type in item.types) {
+-            if ([type isEqualToString:UTTypeFileURL.identifier]) {
++            using NSStringRef = NSString *;
++            if ([type isEqualToString:NSStringRef(kUTTypeFileURL)]) {
+                 isUrl = true;
+                 break;
+             }
+@@ -348,4 +349,3 @@ bool QCocoaDropData::hasFormat_sys(const QString &mimeType) const
+ 
+ 
+ QT_END_NAMESPACE
+-
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoafiledialoghelper.mm b/qtbase/src/plugins/platforms/cocoa/qcocoafiledialoghelper.mm
+index 17cd59cb34c..2733d753f06 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoafiledialoghelper.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoafiledialoghelper.mm
+@@ -1,6 +1,8 @@
+ // Copyright (C) 2016 The Qt Company Ltd.
+ // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+ 
++#include <CoreFoundation/CFAvailability.h>
++#include <Foundation/Foundation.h>
+ #include <QtCore/qglobal.h>
+ 
+ #include <AppKit/AppKit.h>
+@@ -275,7 +277,14 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+ {
+     Q_ASSERT(sender == m_panel);
+ 
+-    if (![m_panel.allowedContentTypes count] && !m_selectedNameFilter.isEmpty()) {
++    bool hasAllowedTypes = false;
++    if (@available(macOS 11.0, *)) {
++        hasAllowedTypes = [m_panel.allowedContentTypes count] > 0;
++    } else {
++        hasAllowedTypes = m_panel.allowedFileTypes;
++    }
++
++    if (!hasAllowedTypes && !m_selectedNameFilter.isEmpty()) {
+         // The save panel hasn't done filtering on our behalf,
+         // either because we couldn't represent the filter via
+         // allowedContentTypes, or we opted out due to a multi part
+@@ -308,7 +317,8 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+                         fileInfo.absoluteDir().dirName().toNSString()];
+ 
+             auto *replaceButton = [alert addButtonWithTitle:qt_mac_AppKitString(@"SavePanel", @"Replace")];
+-            replaceButton.hasDestructiveAction = YES;
++            if (@available(macOS 11.0, *))
++                replaceButton.hasDestructiveAction = YES;
+             replaceButton.tag = 1337;
+             [alert addButtonWithTitle:qt_mac_AppKitString(@"Common", @"Cancel")];
+ 
+@@ -447,6 +457,8 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+ 
+     m_popupButton.hidden = chooseDirsOnly;    // TODO hide the whole sunken pane instead?
+ 
++    if (@available(macOS 11.0, *)) {
++
+     m_panel.allowedContentTypes = [self computeAllowedContentTypes];
+ 
+     // Setting allowedContentTypes to @[] is not enough to reset any
+@@ -467,6 +479,30 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+         }
+     }
+ 
++    } else {
++
++    m_panel.allowedFileTypes = [self computeAllowedFileTypes];
++
++    // Setting allowedFileTypes to nil is not enough to reset any
++    // automatically added extension based on a previous filter.
++    // This is problematic because extensions can in some cases
++    // be hidden from the user, resulting in confusion when the
++    // resulting file name doesn't match the current empty filter.
++    // We work around this by temporarily resetting the allowed
++    // content type to one without an extension, which forces
++    // the save panel to update and remove the extension.
++    const bool nameFieldHasExtension = m_panel.nameFieldStringValue.pathExtension.length > 0;
++    if (!m_panel.allowedFileTypes && !nameFieldHasExtension && !openpanel_cast(m_panel)) {
++        if (![NSWorkspace.sharedWorkspace preferredFilenameExtensionForType:(NSString *)kUTTypeDirectory]) {
++            m_panel.allowedFileTypes = @[ (NSString *)kUTTypeDirectory ];
++            m_panel.allowedFileTypes = nil;
++        } else {
++            qWarning() << "kUTTypeDirectory unexpectedly reported an extension";
++        }
++    }
++
++    }
++
+     m_panel.showsHiddenFiles = m_options->filter().testFlag(QDir::Hidden);
+ 
+     if (m_panel.visible)
+@@ -516,7 +552,7 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+     we treat that as allowing all file types, and do our own
+     validation in panel:validateURL:error.
+ */
+-- (NSArray<UTType*>*)computeAllowedContentTypes
++- (NSArray<UTType*>*)computeAllowedContentTypes API_AVAILABLE(macos(11.0))
+ {
+     if (m_options->acceptMode() != QFileDialogOptions::AcceptSave)
+         return @[]; // panel:shouldEnableURL: does the file filtering for NSOpenPanel
+@@ -543,6 +579,41 @@ typedef QSharedPointer<QFileDialogOptions> SharedPointerFileDialogOptions;
+     return types;
+ }
+ 
++/*
++    Computes a list of extensions (e.g. "png", "jpg", "gif")
++    for the current name filter, and updates the save panel.
++
++    If a filter do not conform to the format *.xyz or * or *.*,
++    or contains an extensions with more than one part (e.g. "tar.gz")
++    we treat that as allowing all file types, and do our own
++    validation in panel:validateURL:error.
++*/
++- (NSArray<NSString*>*)computeAllowedFileTypes
++{
++    if (m_options->acceptMode() != QFileDialogOptions::AcceptSave)
++        return nil; // panel:shouldEnableURL: does the file filtering for NSOpenPanel
++
++    QStringList fileTypes;
++    for (const QString &filter : std::as_const(m_selectedNameFilter)) {
++        if (!filter.startsWith("*."_L1))
++            continue;
++
++        if (filter.contains(u'?'))
++            continue;
++
++        if (filter.count(u'*') != 1)
++            continue;
++
++        auto extensions = filter.split('.', Qt::SkipEmptyParts);
++        if (extensions.count() > 2)
++            return nil;
++
++        fileTypes += extensions.last();
++    }
++
++    return fileTypes.isEmpty() ? nil : qt_mac_QStringListToNSMutableArray(fileTypes);
++}
++
+ - (QString)removeExtensions:(const QString &)filter
+ {
+     QRegularExpression regExp(QString::fromLatin1(QPlatformFileDialogHelper::filterRegExp));
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoaintegration.mm b/qtbase/src/plugins/platforms/cocoa/qcocoaintegration.mm
+index 63553b986ed..3d7a6f6334c 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoaintegration.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoaintegration.mm
+@@ -451,8 +451,8 @@ void QCocoaIntegration::focusWindowChanged(QWindow *focusWindow)
+         return;
+ 
+     static bool hasDefaultApplicationIcon = [](){
+-        NSImage *genericApplicationIcon = [NSWorkspace.sharedWorkspace
+-            iconForContentType:UTTypeApplicationBundle];
++        NSImage *genericApplicationIcon = [[NSWorkspace sharedWorkspace]
++            iconForFileType:NSFileTypeForHFSTypeCode(kGenericApplicationIcon)];
+         NSImage *applicationIcon = [NSImage imageNamed:NSImageNameApplicationIcon];
+ 
+         NSRect rect = NSMakeRect(0, 0, 32, 32);
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoamessagedialog.mm b/qtbase/src/plugins/platforms/cocoa/qcocoamessagedialog.mm
+index f786fc65c45..84525099c96 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoamessagedialog.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoamessagedialog.mm
+@@ -170,7 +170,8 @@ bool QCocoaMessageDialog::show(Qt::WindowFlags windowFlags, Qt::WindowModality w
+         else if ([button.keyEquivalent isEqualToString:@"\e"])
+             button.keyEquivalent = @"";
+ 
+-        button.hasDestructiveAction = role == DestructiveRole;
++        if (@available(macOS 11, *))
++            button.hasDestructiveAction = role == DestructiveRole;
+ 
+         // The NSModalResponse of showing an NSAlert normally depends on the order of the
+         // button that was clicked, starting from the right with NSAlertFirstButtonReturn (1000),
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoascreen.mm b/qtbase/src/plugins/platforms/cocoa/qcocoascreen.mm
+index d8b9601f5d1..da8c23c9767 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoascreen.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoascreen.mm
+@@ -201,6 +201,38 @@ QCocoaScreen::~QCocoaScreen()
+          dispatch_release(m_displayLinkSource);
+ }
+ 
++static QString displayName(CGDirectDisplayID displayID)
++{
++    QIOType<io_iterator_t> iterator;
++    if (IOServiceGetMatchingServices(kIOMasterPortDefault,
++        IOServiceMatching("IODisplayConnect"), &iterator))
++        return QString();
++
++    QIOType<io_service_t> display;
++    while ((display = IOIteratorNext(iterator)) != 0)
++    {
++        NSDictionary *info = [(__bridge NSDictionary*)IODisplayCreateInfoDictionary(
++            display, kIODisplayOnlyPreferredName) autorelease];
++
++        if ([[info objectForKey:@kDisplayVendorID] unsignedIntValue] != CGDisplayVendorNumber(displayID))
++            continue;
++
++        if ([[info objectForKey:@kDisplayProductID] unsignedIntValue] != CGDisplayModelNumber(displayID))
++            continue;
++
++        if ([[info objectForKey:@kDisplaySerialNumber] unsignedIntValue] != CGDisplaySerialNumber(displayID))
++            continue;
++
++        NSDictionary *localizedNames = [info objectForKey:@kDisplayProductName];
++        if (![localizedNames count])
++            break; // Correct screen, but no name in dictionary
++
++        return QString::fromNSString([localizedNames objectForKey:[[localizedNames allKeys] objectAtIndex:0]]);
++    }
++
++    return QString();
++}
++
+ void QCocoaScreen::update(CGDirectDisplayID displayId)
+ {
+     if (displayId != m_displayId) {
+@@ -246,7 +278,11 @@ void QCocoaScreen::update(CGDirectDisplayID displayId)
+     float refresh = CGDisplayModeGetRefreshRate(displayMode);
+     m_refreshRate = refresh > 0 ? refresh : 60.0;
+     m_rotation = CGDisplayRotation(displayId);
+-    m_name = QString::fromNSString(nsScreen.localizedName);
++
++    if (@available(macOS 10.15, *))
++        m_name = QString::fromNSString(nsScreen.localizedName);
++    else
++        m_name = displayName(m_displayId);
+ 
+     const bool didChangeGeometry = m_geometry != previousGeometry || m_availableGeometry != previousAvailableGeometry;
+ 
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm b/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
+index e3ff518b4e1..b8f6a99359a 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoatheme.mm
+@@ -296,16 +296,24 @@ const QPalette *QCocoaTheme::palette(Palette type) const
+ 
+     if (type == SystemPalette) {
+         if (!m_systemPalette) {
+-            [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
++            if (@available(macOS 11, *)) {
++                [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
++                    m_systemPalette = qt_mac_createSystemPalette();
++                }];
++            } else {
+                 m_systemPalette = qt_mac_createSystemPalette();
+-            }];
++            }
+         }
+         return m_systemPalette;
+     } else {
+         if (m_palettes.isEmpty()) {
+-            [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
++            if (@available(macOS 11, *)) {
++                [NSApp.effectiveAppearance performAsCurrentDrawingAppearance:^{
++                    m_palettes = qt_mac_createRolePalettes();
++                }];
++            } else {
+                 m_palettes = qt_mac_createRolePalettes();
+-            }];
++            }
+         }
+         return m_palettes.value(type, nullptr);
+     }
+@@ -414,7 +422,7 @@ public:
+         QAbstractFileIconEngine(info, opts) {}
+ 
+     QList<QSize> availableSizes(QIcon::Mode = QIcon::Normal, QIcon::State = QIcon::Off) override
+-    { return QAppleIconEngine::availableIconSizes(); }
++    { return QAppleIconEngineUtils::availableIconSizes(); }
+ 
+ protected:
+     QPixmap filePixmap(const QSize &size, QIcon::Mode, QIcon::State) override
+@@ -435,7 +443,10 @@ QIcon QCocoaTheme::fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptio
+ 
+ QIconEngine *QCocoaTheme::createIconEngine(const QString &iconName) const
+ {
+-    return new QAppleIconEngine(iconName);
++    if (@available(macOS 11.0, *))
++        return new QAppleIconEngine(iconName);
++    else
++        return nullptr;
+ }
+ 
+ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
+@@ -451,7 +462,7 @@ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
+         return QVariant([[NSApplication sharedApplication] isFullKeyboardAccessEnabled] ?
+                     int(Qt::TabFocusAllControls) : int(Qt::TabFocusTextControls | Qt::TabFocusListControls));
+     case IconPixmapSizes:
+-        return QVariant::fromValue(QAppleIconEngine::availableIconSizes());
++        return QVariant::fromValue(QAppleIconEngineUtils::availableIconSizes());
+     case QPlatformTheme::PasswordMaskCharacter:
+         return QVariant(QChar(0x2022));
+     case QPlatformTheme::UiEffects:
+diff --git a/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm b/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm
+index bca3c9b6f37..5a24871d1f2 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qcocoawindow.mm
+@@ -311,50 +311,58 @@ void QCocoaWindow::setCocoaGeometry(const QRect &rect)
+ 
+ QMargins QCocoaWindow::safeAreaMargins() const
+ {
+-    // The safe area of the view reflects the area not covered by navigation
+-    // bars, tab bars, toolbars, and other ancestor views that might obscure
+-    // the current view (by setting additionalSafeAreaInsets). If the window
+-    // uses NSWindowStyleMaskFullSizeContentView this also includes the area
+-    // of the view covered by the title bar.
+-    QMarginsF viewSafeAreaMargins = {
+-        m_view.safeAreaInsets.left,
+-        m_view.safeAreaInsets.top,
+-        m_view.safeAreaInsets.right,
+-        m_view.safeAreaInsets.bottom
+-    };
+-
+-    // The screen's safe area insets represent the distances from the screen's
+-    // edges at which content isn't obscured. The view's safe area margins do
+-    // not include the screen's insets automatically, so we need to manually
+-    // merge them.
+-    auto screenRect = m_view.window.screen.frame;
+-    auto screenInsets = m_view.window.screen.safeAreaInsets;
+-    auto screenRelativeViewBounds = QCocoaScreen::mapFromNative(
+-        [m_view.window convertRectToScreen:
+-            [m_view convertRect:m_view.bounds toView:nil]]
+-    );
+-
+-    // The margins are relative to the screen the window is on.
+-    // Note that we do not want represent the area outside of the
+-    // screen as being outside of the safe area.
+-    QMarginsF screenSafeAreaMargins = {
+-        screenInsets.left ?
+-            qMax(0.0f, screenInsets.left - screenRelativeViewBounds.left())
+-            : 0.0f,
+-        screenInsets.top ?
+-            qMax(0.0f, screenInsets.top - screenRelativeViewBounds.top())
+-            : 0.0f,
+-        screenInsets.right ?
+-            qMax(0.0f, screenInsets.right
+-                - (screenRect.size.width - screenRelativeViewBounds.right()))
+-            : 0.0f,
+-        screenInsets.bottom ?
+-            qMax(0.0f, screenInsets.bottom
+-                - (screenRect.size.height - screenRelativeViewBounds.bottom()))
+-            : 0.0f
+-    };
+-
+-    return (screenSafeAreaMargins | viewSafeAreaMargins).toMargins();
++    if (@available(macOS 11.0, *)) {
++        // The safe area of the view reflects the area not covered by navigation
++        // bars, tab bars, toolbars, and other ancestor views that might obscure
++        // the current view (by setting additionalSafeAreaInsets). If the window
++        // uses NSWindowStyleMaskFullSizeContentView this also includes the area
++        // of the view covered by the title bar.
++        QMarginsF viewSafeAreaMargins = {
++            m_view.safeAreaInsets.left,
++            m_view.safeAreaInsets.top,
++            m_view.safeAreaInsets.right,
++            m_view.safeAreaInsets.bottom
++        };
++
++        if (@available(macOS 12.0, *)) {
++            // The screen's safe area insets represent the distances from the screen's
++            // edges at which content isn't obscured. The view's safe area margins do
++            // not include the screen's insets automatically, so we need to manually
++            // merge them.
++            auto screenRect = m_view.window.screen.frame;
++            auto screenInsets = m_view.window.screen.safeAreaInsets;
++            auto screenRelativeViewBounds = QCocoaScreen::mapFromNative(
++                [m_view.window convertRectToScreen:
++                    [m_view convertRect:m_view.bounds toView:nil]]
++            );
++
++            // The margins are relative to the screen the window is on.
++            // Note that we do not want represent the area outside of the
++            // screen as being outside of the safe area.
++            QMarginsF screenSafeAreaMargins = {
++                screenInsets.left ?
++                    qMax(0.0f, screenInsets.left - screenRelativeViewBounds.left())
++                    : 0.0f,
++                screenInsets.top ?
++                    qMax(0.0f, screenInsets.top - screenRelativeViewBounds.top())
++                    : 0.0f,
++                screenInsets.right ?
++                    qMax(0.0f, screenInsets.right
++                        - (screenRect.size.width - screenRelativeViewBounds.right()))
++                    : 0.0f,
++                screenInsets.bottom ?
++                    qMax(0.0f, screenInsets.bottom
++                        - (screenRect.size.height - screenRelativeViewBounds.bottom()))
++                    : 0.0f
++            };
++
++            return (screenSafeAreaMargins | viewSafeAreaMargins).toMargins();
++        } else {
++            return viewSafeAreaMargins.toMargins();
++        }
++    } else {
++        return QMargins();
++    }
+ }
+ 
+ void QCocoaWindow::updateSafeAreaMarginsIfNeeded()
+diff --git a/qtbase/src/plugins/platforms/cocoa/qnsview_complextext.mm b/qtbase/src/plugins/platforms/cocoa/qnsview_complextext.mm
+index 2c53647a7f3..74c5cb7d319 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qnsview_complextext.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qnsview_complextext.mm
+@@ -660,6 +660,8 @@
+ 
+ - (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType
+ {
++    if (@available(macOS 11.0, *)) {
++
+     if (auto queryResult = queryInputMethod(self.focusObject, Qt::ImReadOnly | Qt::ImCurrentSelection)) {
+         bool canWriteToPasteboard = false;
+         bool canReadFromPastboard = false;
+@@ -695,10 +697,36 @@
+     }
+ 
+     return [super validRequestorForSendType:sendType returnType:returnType];
++
++    } else {
++
++    bool canWriteToPasteboard = [&]{
++        if (![sendType isEqualToString:NSPasteboardTypeString])
++            return false;
++        if (auto queryResult = queryInputMethod(self.focusObject, Qt::ImCurrentSelection)) {
++            auto selectedText = queryResult.value(Qt::ImCurrentSelection).toString();
++            if (!selectedText.isEmpty())
++                return true;
++        }
++        return false;
++    }();
++
++    bool canReadFromPastboard = [returnType isEqualToString:NSPasteboardTypeString];
++
++    if ((sendType && !canWriteToPasteboard) || (returnType && !canReadFromPastboard)) {
++        return [super validRequestorForSendType:sendType returnType:returnType];
++    } else {
++        qCDebug(lcQpaServices) << "Accepting service interaction for send" << sendType << "and receive" << returnType;
++        return self;
++    }
++
++    }
+ }
+ 
+ - (BOOL)writeSelectionToPasteboard:(NSPasteboard *)pasteboard types:(NSArray<NSPasteboardType> *)types
+ {
++    if (@available(macOS 11.0, *)) {
++
+     bool didWrite = false;
+ 
+     if (auto queryResult = queryInputMethod(self.focusObject, Qt::ImCurrentSelection)) {
+@@ -741,10 +769,29 @@
+     }
+ 
+     return didWrite;
++
++    } else {
++
++    if ([types containsObject:NSPasteboardTypeString]
++        // Check for the deprecated NSStringPboardType as well, as even if we
++        // claim to only support NSPasteboardTypeString, we get callbacks for
++        // the deprecated type.
++        || QT_IGNORE_DEPRECATIONS([types containsObject:NSStringPboardType])) {
++        if (auto queryResult = queryInputMethod(self.focusObject, Qt::ImCurrentSelection)) {
++            auto selectedText = queryResult.value(Qt::ImCurrentSelection).toString();
++            qCDebug(lcQpaServices) << "Writing" << selectedText << "to service pasteboard" << pasteboard.name;
++            return [pasteboard writeObjects:@[ selectedText.toNSString() ]];
++        }
++    }
++    return NO;
++
++    }
+ }
+ 
+ - (BOOL)readSelectionFromPasteboard:(NSPasteboard *)pasteboard
+ {
++    if (@available(macOS 11.0, *)) {
++
+     if (queryInputMethod(self.focusObject)) {
+         auto scope = QUtiMimeConverter::HandlerScopeFlag::Clipboard;
+         QMacPasteboard macPasteboard(CFStringRef(pasteboard.name), scope);
+@@ -777,9 +824,21 @@
+     } else {
+         return NO;
+     }
++
++    } else {
++
++    NSString *insertedString = [pasteboard stringForType:NSPasteboardTypeString];
++    if (!insertedString)
++        return NO;
++
++    qCDebug(lcQpaServices) << "Reading" << insertedString << "from service pasteboard" << pasteboard.name;
++    [self insertText:insertedString replacementRange:{NSNotFound, 0}];
++    return YES;
++
++    }
+ }
+ 
+-- (QString)utiForPasteboardType:(NSPasteboardType)pasteboardType
++- (QString)utiForPasteboardType:(NSPasteboardType)pasteboardType API_AVAILABLE(macos(11.0))
+ {
+     if (!pasteboardType)
+         return QString();
+diff --git a/qtbase/src/plugins/platforms/cocoa/qnsview_dragging.mm b/qtbase/src/plugins/platforms/cocoa/qnsview_dragging.mm
+index 805cc7d59ea..d8f269eedbf 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qnsview_dragging.mm
++++ b/qtbase/src/plugins/platforms/cocoa/qnsview_dragging.mm
+@@ -18,7 +18,7 @@
+                    NSPasteboardTypeRTF, NSPasteboardTypeTabularText, NSPasteboardTypeFont,
+                    NSPasteboardTypeRuler, NSFileContentsPboardType,
+                    NSPasteboardTypeRTFD , NSPasteboardTypeHTML,
+-                   NSPasteboardTypeURL, NSPasteboardTypePDF, UTTypeVCard.identifier,
++                   NSPasteboardTypeURL, NSPasteboardTypePDF, (NSString *)kUTTypeVCard,
+                    (NSString *)kPasteboardTypeFileURLPromise,
+                    NSPasteboardTypeMultipleTextSelection, mimeTypeGeneric]];
+ 
+Submodule qtmultimedia contains modified content
+diff --git a/qtmultimedia/src/multimedia/darwin/qavfhelpers.mm b/qtmultimedia/src/multimedia/darwin/qavfhelpers.mm
+index 3f420cbc0..b1bac617b 100644
+--- a/qtmultimedia/src/multimedia/darwin/qavfhelpers.mm
++++ b/qtmultimedia/src/multimedia/darwin/qavfhelpers.mm
+@@ -86,8 +86,8 @@ QVideoFrameFormat QAVFHelpers::videoFormatForImageBuffer(CVImageBufferRef buffer
+     auto colorSpace = QVideoFrameFormat::ColorSpace_Undefined;
+     auto colorTransfer = QVideoFrameFormat::ColorTransfer_Unknown;
+ 
+-    if (auto cSpace =
+-                QCFString(CVBufferCopyAttachment(buffer, kCVImageBufferYCbCrMatrixKey, nullptr))) {
++    if (CFStringRef cSpace = reinterpret_cast<CFStringRef>(
++                CVBufferGetAttachment(buffer, kCVImageBufferYCbCrMatrixKey, nullptr))) {
+         if (CFEqual(cSpace, kCVImageBufferYCbCrMatrix_ITU_R_709_2)) {
+             colorSpace = QVideoFrameFormat::ColorSpace_BT709;
+         } else if (CFEqual(cSpace, kCVImageBufferYCbCrMatrix_ITU_R_601_4)
+@@ -98,10 +98,8 @@ QVideoFrameFormat QAVFHelpers::videoFormatForImageBuffer(CVImageBufferRef buffer
+         }
+     }
+ 
+-    if (auto cTransfer = QCFString(
+-                CVBufferCopyAttachment(buffer, kCVImageBufferTransferFunctionKey, nullptr))) {
+-
+-        using QCFNumber = QCFType<CFNumberRef>;
++    if (CFStringRef cTransfer = reinterpret_cast<CFStringRef>(
++        CVBufferGetAttachment(buffer, kCVImageBufferTransferFunctionKey, nullptr))) {
+ 
+         if (CFEqual(cTransfer, kCVImageBufferTransferFunction_ITU_R_709_2)) {
+             colorTransfer = QVideoFrameFormat::ColorTransfer_BT709;
+@@ -110,8 +108,8 @@ QVideoFrameFormat QAVFHelpers::videoFormatForImageBuffer(CVImageBufferRef buffer
+         } else if (CFEqual(cTransfer, kCVImageBufferTransferFunction_sRGB)) {
+             colorTransfer = QVideoFrameFormat::ColorTransfer_Gamma22;
+         } else if (CFEqual(cTransfer, kCVImageBufferTransferFunction_UseGamma)) {
+-            auto gamma =
+-                    QCFNumber(CVBufferCopyAttachment(buffer, kCVImageBufferGammaLevelKey, nullptr));
++            auto gamma = reinterpret_cast<CFNumberRef>(
++                        CVBufferGetAttachment(buffer, kCVImageBufferGammaLevelKey, nullptr));
+             double g;
+             CFNumberGetValue(gamma, kCFNumberFloat32Type, &g);
+             // These are best fit values given what we have in our enum

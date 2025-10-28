@@ -1,0 +1,58 @@
+name: "Qt 6.10.0 - macOS - Universal - 10.15"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_qt:
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.15.4"
+      QT_SUBMODULES: "qt5compat,qtbase,qtdeclarative,qtgraphs,qtimageformats,qtmultimedia,qtnetworkauth,qtscxml,qtshadertools,qtsvg,qttools,qttranslations,qtwebsockets"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download and unpack source
+        run: |
+          set -o pipefail
+          mkdir src
+          IFS="," read -r -a SUBMODULE_ARRAY <<< "$QT_SUBMODULES"
+          for submodule in "${SUBMODULE_ARRAY[@]}"; do
+            QT_URL="https://download.qt.io/archive/qt/6.10/6.10.0/submodules/${submodule}-everywhere-src-6.10.0.tar.xz"
+            wget -q "${QT_URL}" -O - | tar xJvf -
+            mv "${submodule}-everywhere-src-6.10.0" "src/${submodule}"
+          done
+      - name: Patch
+        run: |
+          patch -d src < patches/qt6.10.0_macos_10_15.diff
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../src/configure \
+            -prefix ../install \
+            -release \
+            -nomake examples \
+            -nomake tests \
+            -submodules $QT_SUBMODULES \
+            -- \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET
+      - name: Build
+        working-directory: ./build
+        env:
+          NINJA_STATUS: "[%f/%t (%c/s avg %o/s); ETA: %W (%P)]   "
+        run: |
+          cmake --build . --parallel
+      - name: Install
+        working-directory: ./build
+        run: |
+          cmake --install .
+      - name: Package
+        working-directory: ./install
+        run: |
+          7z a "../Qt-6.10.0-macOS-10.15.7z" ./*
+      - name: Upload
+        uses: actions/upload-artifact@v5
+        with:
+          name: "Qt-6.10.0-macOS-10.15"
+          path: "Qt-6.10.0-macOS-10.15.7z"
