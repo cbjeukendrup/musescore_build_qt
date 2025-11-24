@@ -10,7 +10,7 @@ jobs:
   build_qt:
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Setup
         run: |
           brew install cmake ninja

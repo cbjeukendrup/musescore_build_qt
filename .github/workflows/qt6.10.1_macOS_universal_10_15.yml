@@ -9,7 +9,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "10.15.4"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Download and unpack source
         run: |
           set -o pipefail
