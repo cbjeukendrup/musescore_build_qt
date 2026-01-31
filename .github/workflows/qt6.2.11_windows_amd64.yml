@@ -69,7 +69,7 @@ jobs:
         run: |
           7z a -tzip "../Qt-6.2.11-Windows-amd64.zip" .
       - name: Upload
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: "Qt-6.2.11-Windows-amd64"
           path: "D:/a/Qt-6.2.11-Windows-amd64.zip"
