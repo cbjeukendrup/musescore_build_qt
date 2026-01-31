@@ -10,19 +10,21 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "10.15.4"
     steps:
       - uses: actions/checkout@v6
-      - name: Restore ccache
-        uses: actions/cache/restore@v5
-        with:
-          key: ${{ runner.os }}-${{ runner.arch }}-ccache
-          path: ~/.ccache
       - name: Setup ccache
         run: |
           brew install ccache
           echo "CCACHE_BASEDIR=$PWD/sources" >> $GITHUB_ENV
           echo "CCACHE_COMPRESSION=true" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESSION_LEVEL=5" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESSLEVEL=5" >> $GITHUB_ENV
           echo "CCACHE_MAXSIZE=2G" >> $GITHUB_ENV
           echo "CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_ctime,include_file_mtime" >> $GITHUB_ENV
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}-ccache
+          path: ~/Library/Caches/ccache
+      - name: Show ccache stats
+        run: |
           ccache -sv
       - name: Download and unpack source
         run: |
@@ -30,9 +32,9 @@ jobs:
           QT_URL="https://download.qt.io/archive/qt/6.10/6.10.2/single/qt-everywhere-src-6.10.2.tar.xz"
           wget -q "${QT_URL}" -O - | tar xJvf -
           mv qt-everywhere-src-6.10.2 sources
-      - name: Patch
-        run: |
-          patch -d sources < patches/qt6.10.0_macos_10_15.diff
+      # - name: Patch
+      #   run: |
+      #     patch -d sources < patches/qt6.10.0_macos_10_15.diff
       - name: Configure
         run: |
           mkdir build
@@ -40,6 +42,7 @@ jobs:
           ../sources/configure \
             -prefix ../install \
             -release \
+            -ccache \
             -nomake examples \
             -nomake tests \
             -submodules qtbase \
@@ -65,9 +68,13 @@ jobs:
         with:
           name: "Qt-6.10.2-macOS-10.15"
           path: "Qt-6.10.2-macOS-10.15.7z"
+      - name: Show ccache stats
+        if: always()
+        run: |
+          ccache -sv
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v5
         with:
           key: ${{ runner.os }}-${{ runner.arch }}-ccache
-          path: ~/.ccache
+          path: ~/Library/Caches/ccache
