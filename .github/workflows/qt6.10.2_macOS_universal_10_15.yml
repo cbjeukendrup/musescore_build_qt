@@ -64,7 +64,7 @@ jobs:
         run: |
           7z a "../Qt-6.10.2-macOS-10.15.7z" ./*
       - name: Upload
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: "Qt-6.10.2-macOS-10.15"
           path: "Qt-6.10.2-macOS-10.15.7z"
